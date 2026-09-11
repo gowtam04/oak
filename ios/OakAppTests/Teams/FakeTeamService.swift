@@ -51,6 +51,11 @@ final class FakeTeamService: TeamService, @unchecked Sendable {
   var holdsAnalyze = false
   private var parkedAnalyze: [CheckedContinuation<Void, Never>] = []
 
+  /// When `true`, every create parks until ``releaseCreate()`` — used to prove autosave
+  /// never issues a second create while the first is in flight.
+  var holdsCreate = false
+  private var parkedCreate: [CheckedContinuation<Void, Never>] = []
+
   // MARK: Recording
 
   private(set) var listCount = 0
@@ -148,6 +153,11 @@ final class FakeTeamService: TeamService, @unchecked Sendable {
     lastCreateFormat = format
     lastCreateName = name
     lastCreateMembers = members
+    if holdsCreate {
+      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        parkedCreate.append(continuation)
+      }
+    }
     if let createError { throw createError }
     let team = Team(
       id: mintId(),
@@ -259,6 +269,16 @@ final class FakeTeamService: TeamService, @unchecked Sendable {
   func releaseAnalyze() {
     let continuations = parkedAnalyze
     parkedAnalyze = []
+    for continuation in continuations { continuation.resume() }
+  }
+
+  /// How many create calls are currently parked on the ``holdsCreate`` gate.
+  var pendingCreateCount: Int { parkedCreate.count }
+
+  /// Resumes every parked create call.
+  func releaseCreate() {
+    let continuations = parkedCreate
+    parkedCreate = []
     for continuation in continuations { continuation.resume() }
   }
 

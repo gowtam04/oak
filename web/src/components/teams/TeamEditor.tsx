@@ -8,12 +8,13 @@
  * stays roomy and sprite-forward instead of cramming six panels into a grid.
  * Holds a local draft (name + members + selected slot) seeded from the `team`
  * prop and re-seeded whenever a different team is opened (`team.id` changes). Add
- * / remove / reorder act on the draft array and keep the selection sensible; Save
- * hands the draft back to the page (`onSave`) which writes through the
- * never-throwing `useTeams.update`. The returned team carries fresh server
- * `validation`, so the advisory warnings (per-slot inside the focused panel,
- * team-level via {@link TeamWarnings}) reflect the last saved state. Export opens
- * the {@link ExportDialog} via the page.
+ * / remove / reorder act on the draft array and keep the selection sensible.
+ * Draft changes **autosave** through `onSave` (debounced; flushed on team switch
+ * / unmount) which writes through the never-throwing `useTeams.update`. The
+ * returned team carries fresh server `validation`, so the advisory warnings
+ * (per-slot inside the focused panel, team-level via {@link TeamWarnings})
+ * reflect the last saved state. Export opens the {@link ExportDialog} via the
+ * page. There is no Save button.
  *
  * Sprites / types / base stats (for the roster chips, the panel's type badges,
  * and its live-stat bars) come from the page's batch `resolveSprites` lookup in
@@ -98,9 +99,17 @@ export interface TeamEditorProps {
    * a pre-warm/override (e.g. tests), not the only source.
    */
   spriteBySpecies?: Record<string, SpriteRef | undefined>;
-  /** True while a save is in flight (disables Save). */
+  /** True while a save is in flight (status reads "Saving…"). */
   saving?: boolean;
-  onSave: (input: { name: string; members: TeamMember[] }) => void;
+  /**
+   * Persist the live draft. Return `false` on failure so the editor retries;
+   * `void`/`true`/a resolved promise counts as success (tests may pass a spy).
+   */
+  onSave: (input: {
+    id: string;
+    name: string;
+    members: TeamMember[];
+  }) => void | boolean | Promise<void | boolean>;
   onExport: () => void;
   onClose?: () => void;
   /** Optional imperative handle (see {@link TeamEditorHandle}). */
@@ -110,6 +119,17 @@ export interface TeamEditorProps {
   /** Persist optional win condition (Phase 3). */
   winCondition?: string | null;
   onWinConditionChange?: (value: string) => void;
+}
+
+/** Debounce window collapsing rapid draft edits into one persist. */
+export const TEAM_SAVE_DEBOUNCE_MS = 600;
+
+function persistableSnapshot(
+  name: string,
+  members: TeamMember[],
+  winCondition: string | null | undefined,
+): string {
+  return JSON.stringify({ name, members, win: winCondition ?? "" });
 }
 
 export default function TeamEditor({
@@ -136,6 +156,52 @@ export default function TeamEditor({
   // stale draft), and the mutators use functional updates.
   const draftRef = useRef({ name, members });
   draftRef.current = { name, members };
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+  const archivedRef = useRef(archived);
+  archivedRef.current = archived;
+  const winRef = useRef(winCondition);
+  winRef.current = winCondition;
+  const lastSavedRef = useRef(
+    persistableSnapshot(team.name, team.members, team.winCondition),
+  );
+  const editingIdRef = useRef(team.id);
+  const inFlightRef = useRef(false);
+  const pendingRef = useRef(false);
+
+  const persistNow = useRef(async () => {
+    if (archivedRef.current) return;
+    const snap = persistableSnapshot(
+      draftRef.current.name,
+      draftRef.current.members,
+      winRef.current,
+    );
+    if (snap === lastSavedRef.current) return;
+    if (inFlightRef.current) {
+      pendingRef.current = true;
+      return;
+    }
+    inFlightRef.current = true;
+    const id = editingIdRef.current;
+    try {
+      const result = await onSaveRef.current({
+        id,
+        name: draftRef.current.name,
+        members: draftRef.current.members,
+      });
+      if (result !== false && editingIdRef.current === id) {
+        lastSavedRef.current = snap;
+      }
+    } finally {
+      inFlightRef.current = false;
+      if (pendingRef.current && editingIdRef.current === id) {
+        pendingRef.current = false;
+        void persistNow.current();
+      } else {
+        pendingRef.current = false;
+      }
+    }
+  });
   useImperativeHandle(
     handleRef,
     (): TeamEditorHandle => ({
@@ -164,12 +230,48 @@ export default function TeamEditor({
 
   // Re-seed the draft whenever a different team is opened. Keyed on id so typing
   // in the same team doesn't clobber the draft on an unrelated re-render.
+  // Cleanup flushes the previous team's live draft (via refs) so a team switch
+  // does not drop unsaved keystrokes.
   useEffect(() => {
     setName(team.name);
     setMembers(team.members);
     setSelectedSlot(0);
     setResolved({});
+    lastSavedRef.current = persistableSnapshot(
+      team.name,
+      team.members,
+      team.winCondition,
+    );
+    editingIdRef.current = team.id;
+    return () => {
+      void persistNow.current();
+    };
   }, [team.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (archived) return;
+    const snap = persistableSnapshot(name, members, winCondition);
+    if (snap === lastSavedRef.current) return;
+    const t = window.setTimeout(() => {
+      void persistNow.current();
+    }, TEAM_SAVE_DEBOUNCE_MS);
+    return () => window.clearTimeout(t);
+  }, [archived, name, members, winCondition]);
+
+  useEffect(() => {
+    const flush = () => {
+      void persistNow.current();
+    };
+    const onVis = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("beforeunload", flush);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
 
   // The effective sprite map: locally-resolved refs, with the optional prop seed
   // layered on top (the prop wins, e.g. for a test-injected ref).
@@ -242,16 +344,23 @@ export default function TeamEditor({
       return next;
     });
 
-  const moveMember = (index: number, dir: -1 | 1) =>
+  const moveMember = (from: number, to: number) =>
     setMembers((prev) => {
-      const target = index + dir;
-      if (target < 0 || target >= prev.length) return prev;
+      if (
+        from === to ||
+        from < 0 ||
+        to < 0 ||
+        from >= prev.length ||
+        to >= prev.length
+      ) {
+        return prev;
+      }
       const next = [...prev];
-      [next[index], next[target]] = [next[target]!, next[index]!];
+      const [item] = next.splice(from, 1);
+      if (item === undefined) return prev;
+      next.splice(to, 0, item);
       // Keep the focus on the member that moved.
-      setSelectedSlot((s) =>
-        s === index ? target : s === target ? index : s,
-      );
+      setSelectedSlot(to);
       return next;
     });
 
@@ -334,6 +443,7 @@ export default function TeamEditor({
         spriteBySpecies={sprites}
         onSelect={(i) => setSelectedSlot(i)}
         onAdd={archived ? undefined : addMember}
+        onReorder={archived ? undefined : moveMember}
       />
 
       {focused ? (
@@ -350,8 +460,8 @@ export default function TeamEditor({
           spriteRef={focused.species ? sprites[focused.species] : undefined}
           onChange={(next) => updateMember(slot, next)}
           onRemove={() => removeMember(slot)}
-          onMoveUp={() => moveMember(slot, -1)}
-          onMoveDown={() => moveMember(slot, 1)}
+          onMoveUp={() => moveMember(slot, slot - 1)}
+          onMoveDown={() => moveMember(slot, slot + 1)}
           canMoveUp={slot > 0}
           canMoveDown={slot < members.length - 1}
         />
@@ -391,16 +501,14 @@ export default function TeamEditor({
           <span aria-hidden>{complete ? "✓" : "⚠"}</span>
           {complete ? "Legal" : "Incomplete"}
         </span>
-        {!archived && (
-          <button
-            type="button"
-            className="tm-btn tm-btn--primary team-editor__save"
-            data-testid="team-save"
-            onClick={() => onSave({ name, members })}
-            disabled={saving}
+        {!archived && (saving || savePulse) && (
+          <span
+            className="team-editor__save-status"
+            data-testid="team-save-status"
+            data-state={saving ? "saving" : "saved"}
           >
-            {saving ? "Saving…" : "Save"}
-          </button>
+            {saving ? "Saving…" : "Saved"}
+          </span>
         )}
       </div>
     </div>

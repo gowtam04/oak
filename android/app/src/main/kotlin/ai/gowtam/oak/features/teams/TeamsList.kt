@@ -7,6 +7,7 @@ import ai.gowtam.oak.features.auth.AuthViewModel
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.OakTopBar
@@ -55,11 +56,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -85,6 +89,7 @@ fun TeamsRoute(services: ServiceContainer, appState: AppState, modifier: Modifie
     var destination by rememberSaveable(services) { mutableStateOf(0) } // 0 = list, 1 = editor
     var editorViewModel by remember { mutableStateOf<TeamEditorViewModel?>(null) }
     var loadsOnAppear by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     fun openEditor(vm: TeamEditorViewModel, loadOnAppear: Boolean) {
         editorViewModel = vm
@@ -93,9 +98,13 @@ fun TeamsRoute(services: ServiceContainer, appState: AppState, modifier: Modifie
     }
 
     fun backToList() {
+        val editor = editorViewModel
         destination = 0
         editorViewModel = null
-        listViewModel.reload()
+        scope.launch {
+            editor?.flushSave()
+            listViewModel.reload()
+        }
     }
 
     BackHandler(enabled = destination == 1) { backToList() }
@@ -226,7 +235,10 @@ private fun TeamsListScreen(
                 state.livingTeams.isEmpty() && state.archivedTeams.isEmpty() && state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = LocalOakColors.current.accent)
                 }
-                state.livingTeams.isEmpty() && state.archivedTeams.isEmpty() -> EmptyState()
+                state.livingTeams.isEmpty() && state.archivedTeams.isEmpty() -> EmptyState(
+                    onNew = onOpenNew,
+                    onImport = { isImporting = true },
+                )
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = OakSpacing.sm),
@@ -301,22 +313,34 @@ private fun TeamsListScreen(
 }
 
 @Composable
-private fun EmptyState() {
+private fun EmptyState(onNew: () -> Unit, onImport: () -> Unit) {
     val oak = LocalOakColors.current
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+        ) {
             Icon(Icons.Filled.Groups, contentDescription = null, tint = oak.textMuted, modifier = Modifier.size(56.dp))
             Text(
                 text = "No teams yet",
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = "Create a team with the + button, or import one from Showdown.",
+                text = "Start a Champions team, or import a Showdown paste.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = oak.textMuted,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = OakSpacing.xl),
             )
+            OakButton(
+                onClick = onNew,
+                modifier = Modifier.padding(top = OakSpacing.xs).testTag("oak-new-team"),
+            ) { Text("New team") }
+            OakButton(
+                onClick = onImport,
+                style = OakButtonStyle.Secondary,
+                modifier = Modifier.testTag("oak-import-showdown"),
+            ) { Text("Import from Showdown") }
         }
     }
 }

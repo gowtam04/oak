@@ -141,6 +141,7 @@ describe("recordTurn", () => {
       images_count: 1,
       prompt_text: "How fast is Garchomp?",
       answer_text: "Garchomp has base 102 Speed.",
+      assistant_message_id: null,
     });
 
     // tool_trace is the JSON-serialized trace; answer_json is the serialized answer.
@@ -272,6 +273,21 @@ describe("recordTurn", () => {
       expect(row!.prompt_text).toBe(prompt);
     },
   );
+
+  it("round-trips assistant_message_id and allows null answer_json (B-26 signed-in)", async () => {
+    const input = answeredTurn({
+      answer: null,
+      answerText: "Garchomp has base 102 Speed.",
+      assistantMessageId: "asst-msg-1",
+    });
+    await repo.recordTurn(input);
+
+    const row = await readTurn(input.id);
+    expect(row!.assistant_message_id).toBe("asst-msg-1");
+    expect(row!.answer_json).toBeNull();
+    expect(row!.answer_text).toBe("Garchomp has base 102 Speed.");
+    expect(JSON.parse(row!.tool_trace as string)).toEqual(input.toolTrace);
+  });
 });
 
 

@@ -8,6 +8,7 @@ import {
   GENERATION_BASIS_FALLBACK,
 } from "@/components/test-fixtures";
 import type { GenerationBasis } from "@/components/types";
+import { regulationChipLabel } from "@/data/formats";
 
 const GENERATION_BASIS_CHAMPIONS: GenerationBasis = {
   generation: "champions",
@@ -103,7 +104,7 @@ describe("Masthead — scope tag", () => {
     );
     const scope = screen.getByTestId("answer-masthead-scope");
     expect(scope).toHaveTextContent("Champions");
-    expect(scope).toHaveTextContent("Reg M-B");
+    expect(scope).toHaveTextContent(regulationChipLabel());
   });
 
   it("renders the National Dex scope tag", () => {

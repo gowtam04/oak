@@ -81,5 +81,6 @@ Web / iOS / Android
 - `implementation-plan.md` — phases, file map, Build Manifest
 - `decisions.md` — ADRs
 - `deployment.md` — commands, ops, cost (startup)
+- [`../regulation-cutover.md`](../regulation-cutover.md) — how to pin the next Champions regulation (Showdown SHA, not npm `@pkmn/mods`)
 
 PM mode: no `conventions.md`, no `testing-strategy.md`. Tests are specified per phase (`test_focus`).

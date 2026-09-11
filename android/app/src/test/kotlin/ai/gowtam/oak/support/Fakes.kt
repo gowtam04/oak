@@ -332,6 +332,8 @@ class FakeTeamService(
     var analyzeError: OakError? = null,
     /** Optional per-call script (result / thrown error / a gate to suspend on) — overrides the defaults while non-empty. */
     var analyzeScript: ArrayDeque<AnalyzeStep>? = null,
+    /** When set, every create parks on this gate until the test completes it. */
+    var createGate: CompletableDeferred<Unit>? = null,
 ) : TeamService {
     val listCalls = mutableListOf<Boolean>()
     val getCalls = mutableListOf<String>()
@@ -364,6 +366,7 @@ class FakeTeamService(
 
     override suspend fun create(format: Format, name: String?, members: List<TeamMember>?): Pair<Team, List<TeamWarning>> {
         createCalls += Triple(format, name, members)
+        createGate?.await()
         error?.let { throw it }
         return teamResult
     }

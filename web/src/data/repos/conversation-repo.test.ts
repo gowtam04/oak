@@ -48,7 +48,7 @@ type ChatQolRepo = Repo & {
     conversationId: string,
     userText: string,
     answer: OakAnswer,
-  ) => Promise<void>;
+  ) => Promise<string>;
   setArchived: (
     accountId: string,
     conversationId: string,
@@ -540,7 +540,7 @@ describe("replaceLastPair", () => {
     await append(ACCT_A, id, SV, "first question", "a1", 1000);
     await append(ACCT_A, id, SV, "second question", "a2", 2000);
 
-    await repo.replaceLastPair(
+    const assistantId = await repo.replaceLastPair(
       ACCT_A,
       id,
       "second question edited",
@@ -558,6 +558,7 @@ describe("replaceLastPair", () => {
       [2, "user", "second question edited"],
       [3, "assistant", "a2-retry"],
     ]);
+    expect(turns[3].id).toBe(assistantId);
     expect(JSON.parse(turns[3].answerJson!).answer_markdown).toBe("a2-retry");
     // Exactly one current pair for that last question — old last pair is gone.
     expect(turns.filter((t) => t.textContent === "second question")).toHaveLength(0);

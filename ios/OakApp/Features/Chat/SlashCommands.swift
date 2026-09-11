@@ -2,37 +2,44 @@ import Foundation
 
 /// Leading-token slash parse on send (SLASH-US-1 / ADR-10).
 ///
-/// Classifies only — it does not POST `/api/chat`. Known tokens: `/new`, `/team`,
-/// `/dex`, `/calc`, and `/usage` only when `hasUsagePage` is true. `/calc` is a
-/// handled slash (ADR-4) — `rest` is the substring after the token, trimmed.
-/// `/compare` stays an ordinary message (CMP-BR-3). iOS Usage is a fifth tab
-/// (ADR-6), so chat passes `hasUsagePage: true` and `/usage` navigates.
+/// Classifies only — it does not POST `/api/chat`. Known tokens (case-insensitive
+/// exact match): `/new`, `/team`, `/dex`, `/calc`, `/help`, and `/usage` only when
+/// `hasUsagePage` is true. After trim, text `=== "/"` is `.bare`. `/calc` rest is
+/// the substring after the token, trimmed. `/compare` stays an ordinary message
+/// (CMP-BR-3). iOS Usage is a fifth tab (ADR-6), so chat passes `hasUsagePage:
+/// true` and `/usage` navigates.
 enum SlashCommands {
   /// Leading-token parse. First whitespace-delimited token after leading
-  /// whitespace wins. Exact token match only (`/newish` / `/calcish` are messages).
+  /// whitespace wins. Exact token match only (`/newish` / `/calcish` are messages),
+  /// compared case-insensitively.
   static func parse(_ text: String, hasUsagePage: Bool = false) -> SlashCommand {
-    let token = firstToken(text)
-    if token == "/new" { return .navigate(target: .new) }
-    if token == "/team" { return .navigate(target: .team) }
-    if token == "/dex" { return .navigate(target: .dex) }
-    if token == "/calc" {
-      let trimmed = trimStart(text)
-      let rest = String(trimmed.dropFirst(token.count))
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-      return .calc(rest: rest)
+    if text.trimmingCharacters(in: .whitespacesAndNewlines) == "/" {
+      return .bare
     }
-    if token == "/usage", hasUsagePage { return .navigate(target: .usage) }
+
+    let command = firstToken(text).lowercased()
+    if command == "/new" { return .navigate(target: .new) }
+    if command == "/team" { return .navigate(target: .team) }
+    if command == "/dex" { return .navigate(target: .dex) }
+    if command == "/help" { return .help }
+    if command == "/calc" { return .calc(rest: slashArg(text)) }
+    if command == "/usage", hasUsagePage { return .navigate(target: .usage) }
     return .message
   }
 
+  /// Remainder after the first `\S+` token, trimmed. Empty string if none.
+  static func slashArg(_ text: String) -> String {
+    let trimmed = trimStart(text)
+    let token = firstToken(trimmed)
+    if token.isEmpty { return "" }
+    return String(trimmed.dropFirst(token.count))
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
   /// Text after the leading token (trimmed), used by the client to route
-  /// `/team {name}` / `/dex {name}`. Empty when the send is just the command.
+  /// `/team {name}` / `/dex {name}`. `nil` when the send is just the command.
   static func argument(_ text: String) -> String? {
-    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard let match = trimmed.range(of: #"^\S+\s+"#, options: .regularExpression) else {
-      return nil
-    }
-    let rest = trimmed[match.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+    let rest = slashArg(text)
     return rest.isEmpty ? nil : rest
   }
 
@@ -54,6 +61,8 @@ enum SlashCommands {
 enum SlashCommand: Equatable, Sendable {
   case navigate(target: Target)
   case calc(rest: String)
+  case help
+  case bare
   case message
 
   enum Target: Equatable, Sendable {

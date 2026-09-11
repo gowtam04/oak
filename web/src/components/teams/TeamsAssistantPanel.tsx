@@ -267,7 +267,7 @@ export default function TeamsAssistantPanel({
             <p className="assistant-panel__empty">
               I can see the team you have open. Ask me to fill a slot, fix a
               moveset, check your coverage, or suggest a spread — edits apply to
-              your unsaved draft, and you keep the Save button.
+              this team and save automatically.
             </p>
             <div
               className="assistant-panel__suggestions"

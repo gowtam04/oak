@@ -160,7 +160,7 @@ sealed interface Format {
   `Gen 5`; `Unknown` echoes its raw string.
 - `displayLabel` (mirrors `scopeLabel`): `Champions · Reg M-B`, `Gen 9 · Scarlet/Violet`,
   `Gen 8 · Sword/Shield`, `Gen 7 · USUM`, `Gen 6 · XY/ORAS`, `Gen 5 · Black/White`. The
-  Champions regulation string (`Regulation M-B`, from `CHAMPIONS_REGULATION`) is duplicated
+  Champions regulation string (from `GET /api/scope`, currently Regulation M-C) is duplicated
   here — update it when the regulation rotates.
 - **Tolerant decoding is load-bearing:** a web-created conversation/team in a format this
   app build doesn't know (`gen-5`…`gen-8` postdate the original 2-case Format; more may be

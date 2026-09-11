@@ -2,9 +2,10 @@ import SwiftUI
 
 /// The team-library screen (history-and-teams.md M-TEAM-US-6; M-UI-US-5): a
 /// format-filterable list of saved teams with native list patterns — swipe to delete,
-/// a context menu (edit / duplicate / delete), and pull-to-refresh. New teams are
-/// created via the "+" menu (per format) and Showdown pastes via the import sheet
-/// (M-TEAM-US-2).
+/// a context menu (edit / duplicate / delete), and pull-to-refresh. New teams and
+/// Showdown imports are created via the enamel + disc (same one-handed pattern as
+/// Chat's new-chat FAB) — not a trailing toolbar menu, which iOS 26's enamel lid
+/// swallows next to the regulation chip.
 ///
 /// Teams are signed-in only (M-BR-T1): a guest sees a sign-in prompt, not an empty list.
 /// The view owns its ``TeamsListViewModel`` (`@State`) and drives it; all logic lives in
@@ -25,6 +26,8 @@ struct TeamsListView: View {
   @State private var showSignIn = false
   /// Archived delete confirmation target (CF-TEAM-US-5).
   @State private var teamPendingDelete: TeamSummary?
+  /// `true` while the add-team confirmation dialog (New team / Import) is up.
+  @State private var showAddActions = false
 
   init(model: TeamsListViewModel) {
     _model = State(initialValue: model)
@@ -54,14 +57,15 @@ struct TeamsListView: View {
             RegulationChip()
           }
           .oakLidItem()
-          ToolbarItem(placement: .topBarTrailing) {
-            addMenu
-          }
-          .oakLidItem()
         }
       }
       .navigationDestination(item: $editorTarget) { target in
         editorView(for: target)
+      }
+      .confirmationDialog("Add team", isPresented: $showAddActions, titleVisibility: .visible) {
+        Button("New team") { startNewTeam() }
+        Button("Import from Showdown") { isImporting = true }
+        Button("Cancel", role: .cancel) {}
       }
       .sheet(isPresented: $isImporting, onDismiss: { Task { await model.reload() } }) {
         ShowdownImportView(model: model)
@@ -142,50 +146,61 @@ struct TeamsListView: View {
 
   @ViewBuilder
   private var listContent: some View {
-    if model.teams.isEmpty && model.archivedTeams.isEmpty {
-      if model.isLoading {
-        skeletonList
+    Group {
+      if model.teams.isEmpty && model.archivedTeams.isEmpty {
+        if model.isLoading {
+          skeletonList
+        } else {
+          emptyState
+        }
       } else {
-        emptyState
+        teamList
       }
-    } else {
-      List {
-        if !model.teams.isEmpty {
-          Section {
-            ForEach(model.teams) { team in
-              livingRow(team)
-            }
-          }
-        } else if !model.isLoading {
-          Section {
-            Text("No Champions teams yet")
-              .font(Theme.body(.subheadline))
-              .foregroundStyle(Theme.textSecondary)
-              .listRowBackground(Theme.surface)
-          }
-        }
-        if !model.archivedTeams.isEmpty {
-          Section("Archived") {
-            ForEach(model.archivedTeams) { team in
-              archivedRow(team)
-            }
+    }
+    .overlay(alignment: .bottomTrailing) {
+      // Hide while the editor is pushed so the disc doesn't float over the form.
+      if editorTarget == nil { addTeamFAB }
+    }
+  }
+
+  private var teamList: some View {
+    List {
+      if !model.teams.isEmpty {
+        Section {
+          ForEach(model.teams) { team in
+            livingRow(team)
           }
         }
-      }
-      .listStyle(.plain)
-      .scrollContentBackground(.hidden)
-      .background(Theme.canvas)
-      .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.teams)
-      .refreshable {
-        await model.reload()
-        await model.reloadArchived()
-      }
-      .overlay(alignment: .bottom) {
-        if let message = model.errorMessage {
-          ErrorBanner(message: message, onDismiss: { model.dismissError() })
-            .padding(.horizontal, Theme.Spacing.lg)
-            .padding(.bottom, Theme.Spacing.sm)
+      } else if !model.isLoading {
+        Section {
+          Text("No Champions teams yet")
+            .font(Theme.body(.subheadline))
+            .foregroundStyle(Theme.textSecondary)
+            .listRowBackground(Theme.surface)
         }
+      }
+      if !model.archivedTeams.isEmpty {
+        Section("Archived") {
+          ForEach(model.archivedTeams) { team in
+            archivedRow(team)
+          }
+        }
+      }
+    }
+    .listStyle(.plain)
+    .scrollContentBackground(.hidden)
+    .background(Theme.canvas)
+    .contentMargins(.bottom, 88, for: .scrollContent)
+    .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.teams)
+    .refreshable {
+      await model.reload()
+      await model.reloadArchived()
+    }
+    .overlay(alignment: .bottom) {
+      if let message = model.errorMessage {
+        ErrorBanner(message: message, onDismiss: { model.dismissError() })
+          .padding(.horizontal, Theme.Spacing.lg)
+          .padding(.bottom, Theme.Spacing.sm)
       }
     }
   }
@@ -291,36 +306,50 @@ struct TeamsListView: View {
     }
   }
 
-  // MARK: Toolbar menus
+  // MARK: Add team
 
-  private var addMenu: some View {
-    Menu {
-      Button {
-        editorTarget = .new(.champions)
-      } label: {
-        Label("New Champions team", systemImage: "plus")
-      }
-      Button {
-        isImporting = true
-      } label: {
-        Label("Import from Showdown", systemImage: "square.and.arrow.down")
-      }
+  /// Enamel 56pt add-team disc, bottom-trailing above the tab bar — a one-handed
+  /// reach (replaces the trailing toolbar + menu the enamel lid swallowed).
+  private var addTeamFAB: some View {
+    Button {
+      Haptics.tap()
+      showAddActions = true
     } label: {
-      Label("Add team", systemImage: "plus")
+      Image(systemName: "plus")
+        .font(.system(size: 22, weight: .semibold))
+        .foregroundStyle(Theme.onRed)
+        .frame(width: 56, height: 56)
+        .background(Theme.accent, in: Circle())
+        .oakShadow(.raised)
     }
+    .buttonStyle(FloatingActionButtonStyle(reduceMotion: reduceMotion))
+    .padding(.trailing, Theme.Spacing.lg)
+    .padding(.bottom, Theme.Spacing.lg)
+    .accessibilityLabel("Add team")
+    .accessibilityIdentifier("oak-add-team")
+  }
+
+  private func startNewTeam() {
+    Haptics.tap()
+    editorTarget = .new(.champions)
   }
 
   // MARK: Editor routing
 
   @ViewBuilder
   private func editorView(for target: EditorTarget) -> some View {
+    let finished: () async -> Void = { [model] in
+      await model.reload()
+      await model.reloadArchived()
+    }
     switch target {
     case let .new(format):
-      TeamEditorView(model: model.makeEditor(forNewTeam: format))
+      TeamEditorView(model: model.makeEditor(forNewTeam: format), onFinished: finished)
     case let .existing(summary):
-      TeamEditorView(model: model.makeEditor(for: summary), loadsOnAppear: true)
+      TeamEditorView(
+        model: model.makeEditor(for: summary), loadsOnAppear: true, onFinished: finished)
     case let .created(team):
-      TeamEditorView(model: model.makeEditor(for: team))
+      TeamEditorView(model: model.makeEditor(for: team), onFinished: finished)
     }
   }
 
@@ -352,11 +381,18 @@ struct TeamsListView: View {
       OakBrandMark(size: 64)
       Text("No teams yet")
         .font(Theme.display(.title3))
-      Text("Create a Champions team with the + button, or import one from Showdown.")
+      Text("Start a Champions team, or import a Showdown paste.")
         .font(Theme.body(.subheadline))
         .foregroundStyle(Theme.textSecondary)
         .multilineTextAlignment(.center)
         .padding(.horizontal, 32)
+      Button("New team") { startNewTeam() }
+        .buttonStyle(.oakPrimary)
+        .accessibilityIdentifier("oak-new-team")
+        .padding(.top, 4)
+      Button("Import from Showdown") { isImporting = true }
+        .buttonStyle(.oakSecondary)
+        .accessibilityIdentifier("oak-import-showdown")
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }

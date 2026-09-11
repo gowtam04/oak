@@ -70,18 +70,16 @@ export default function CalculatorOverlay({
   onExpand,
 }: CalculatorOverlayProps) {
   const fromSlash = useMemo(() => parseSlashRest(slashRest), [slashRest]);
-  const initial = scenario
+  const incoming = scenario
     ? { ...scenario, format: CHAMPIONS_FORMAT }
     : fromSlash;
-  const [live, setLive] = useState<CalcScenario>(initial);
-
-  useEffect(() => {
-    setLive(
-      scenario
-        ? { ...scenario, format: CHAMPIONS_FORMAT }
-        : parseSlashRest(slashRest),
-    );
-  }, [scenario, slashRest]);
+  const hopKey = `${slashRest}::${JSON.stringify(scenario ?? null)}`;
+  const [live, setLive] = useState<CalcScenario>(incoming);
+  const [seenHop, setSeenHop] = useState(hopKey);
+  if (seenHop !== hopKey) {
+    setSeenHop(hopKey);
+    setLive(incoming);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -131,8 +129,9 @@ export default function CalculatorOverlay({
           </div>
         </header>
         <CalculatorPanel
+          key={hopKey}
           format={CHAMPIONS_FORMAT}
-          scenario={live}
+          scenario={incoming}
           onScenarioChange={setLive}
           onExplain={handleExplain}
         />

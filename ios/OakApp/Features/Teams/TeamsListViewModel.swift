@@ -236,8 +236,8 @@ final class TeamsListViewModel {
 
   // MARK: Child editor factories
 
-  /// An editor for a brand-new, unsaved team in `format` (the "+" flow). The editor's
-  /// own Save persists it; the list reloads on return.
+  /// An editor for a brand-new, unsaved team in `format` (the "+" flow). Autosave
+  /// persists on the first edit; the list reloads on return.
   func makeEditor(forNewTeam format: Format) -> TeamEditorViewModel {
     _ = format
     return TeamEditorViewModel(teamService: teamService, dexLookup: dexLookup, format: .champions)

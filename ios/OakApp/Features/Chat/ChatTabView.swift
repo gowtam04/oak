@@ -107,7 +107,8 @@ struct ChatTabView: View {
           history: services.history,
           teams: services.teams,
           shares: services.shares,
-          voice: services.voice
+          voice: services.voice,
+          dexLookup: services.dexLookup
         ),
         showsNewConversationButton: true,
         signInAction: { showSignIn = true }

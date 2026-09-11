@@ -55,7 +55,7 @@ guard compared against `"standard"` in a way that breaks.
 | Format | AgentMode | Dex | `generation_basis.generation` tag |
 |---|---|---|---|
 | `scarlet-violet` | `standard` | `Dex.forGen(9)` | `gen-9` |
-| `champions` | `champions` | Gen 9 dex via `@pkmn/mods` champions | `champions` |
+| `champions` | `champions` | Gen 9 dex via Showdown pin + `Dex.mod` | `champions` |
 | `gen-5` | `gen-5` | `Dex.forGen(5)` | `gen-5` |
 | `gen-6` | `gen-6` | `Dex.forGen(6)` | `gen-6` |
 | `gen-7` | `gen-7` | `Dex.forGen(7)` | `gen-7` |

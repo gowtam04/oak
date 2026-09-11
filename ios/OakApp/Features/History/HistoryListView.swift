@@ -509,20 +509,6 @@ struct ConversationListView: View {
   }
 }
 
-/// The floating-action-disc press style: a 0.94 scale-down while held, springing with
-/// `Theme.Motion.snappy`. Scale is dropped under Reduce Motion (feedback stays as the
-/// opacity dim).
-private struct FloatingActionButtonStyle: ButtonStyle {
-  let reduceMotion: Bool
-
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .scaleEffect(configuration.isPressed && !reduceMotion ? 0.94 : 1)
-      .opacity(configuration.isPressed ? 0.92 : 1)
-      .animation(Theme.Motion.snappy, value: configuration.isPressed)
-  }
-}
-
 /// One conversation row: the title and a mono meta line ("GEN 9 · 19H AGO").
 /// When `isOpen`, an **Open** stamp trails (never a red rail). Color is never
 /// the sole signal — the format is shown as text (M-AC-UI9.3).

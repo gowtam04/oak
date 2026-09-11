@@ -141,20 +141,27 @@ export default function TeamsPage() {
 
   const [saving, setSaving] = useState(false);
   const handleSave = useCallback(
-    async (input: { name: string; members: TeamMember[] }) => {
-      if (!selected) return;
+    async (input: {
+      id: string;
+      name: string;
+      members: TeamMember[];
+    }): Promise<boolean> => {
       setSaving(true);
-      const updated = await teams.update(selected.id, {
-        ...input,
+      const updated = await teams.update(input.id, {
+        name: input.name,
+        members: input.members,
         winCondition: winConditionDraft.trim() || null,
       });
       setSaving(false);
       if (updated) {
-        setSelected(updated);
-        setWinConditionDraft(updated.winCondition ?? "");
+        setSelected((current) =>
+          current?.id === input.id ? updated : current,
+        );
+        return true;
       }
+      return false;
     },
-    [selected, teams, winConditionDraft],
+    [teams, winConditionDraft],
   );
 
   const handleNew = useCallback(async () => {
@@ -360,7 +367,7 @@ export default function TeamsPage() {
                   <TeamEditor
                     team={selected}
                     saving={saving}
-                    onSave={(input) => void handleSave(input)}
+                    onSave={handleSave}
                     onExport={() => void handleExport()}
                     onClose={() => setSelected(null)}
                     handleRef={editorRef}

@@ -3,7 +3,7 @@
   "kind": "move",
   "format": "champions",
   "resolved": { "slug": "earthquake", "display_name": "Earthquake" },
-  "generation": "Champions — Regulation M-B",
+  "generation": "Champions — Regulation M-C",
   "is_fallback": false,
   "citations": [
     { "source": "move/earthquake", "detail": "Power, accuracy, PP." }

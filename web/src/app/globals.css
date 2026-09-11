@@ -4759,6 +4759,15 @@ button.scope-chip:focus-visible {
   font-weight: 600;
   color: var(--text-muted);
 }
+.team-editor__save-status {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.team-editor__save-status[data-state="saved"] {
+  color: var(--success);
+}
 .team-editor__legality {
   margin-left: auto;
   display: inline-flex;
@@ -4841,6 +4850,16 @@ button.scope-chip:focus-visible {
   box-shadow: var(--shadow-raised);
   background: var(--surface);
   transform: translateY(-2px);
+}
+.roster-slot[draggable="true"] {
+  cursor: grab;
+}
+.roster-slot[data-dragging="true"] {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+.roster-slot[data-drop-target="true"] {
+  border: 2px dashed var(--poke-red);
 }
 .roster-slot[data-empty="true"] {
   border-style: solid;
@@ -6818,6 +6837,55 @@ button.scope-chip:focus-visible {
   padding: var(--space-2) var(--space-3);
   color: var(--text-muted);
   font-size: var(--text-sm);
+}
+.slash-ac {
+  position: absolute;
+  bottom: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  z-index: var(--z-popover);
+  display: flex;
+  flex-direction: column;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-floating);
+}
+.slash-ac__option {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  color: var(--text-strong);
+}
+.slash-ac__option:hover,
+.slash-ac__option--selected {
+  background: var(--surface-sunken);
+}
+.slash-ac__empty {
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.slash-ac__caption {
+  padding: var(--space-1) var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.slash-ac__hint,
+.slash-ac__kind {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.slash-ac__token {
+  font-family: var(--mono);
 }
 .cmd-palette-backdrop,
 .shortcut-overlay-backdrop {

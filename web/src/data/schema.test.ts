@@ -530,6 +530,13 @@ describe("Drizzle migration — table creation", () => {
       "day_utc",
     ]);
   });
+
+  it("turn_record has assistant_message_id (B-26 logical FK) and its index", async () => {
+    const cols = await columnNames(db, "turn_record");
+    expect(cols).toContain("assistant_message_id");
+    const indexes = await indexNames(db);
+    expect(indexes).toContain("turn_record_assistant_message_idx");
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -585,7 +585,7 @@ describe("Home — slash intercept (SLASH-US-1, ADR-10)", () => {
       fireEvent.click(screen.getByTestId("composer-send"));
     });
     expect(chatBodies).toHaveLength(0);
-    expect(screen.getByTestId("calculator-overlay")).toBeInTheDocument();
+    expect(await screen.findByTestId("calculator-overlay")).toBeInTheDocument();
   });
 
   it("sends an unknown slash as a normal message (SLASH-AC-1.5)", async () => {
@@ -605,8 +605,8 @@ describe("Home — slash intercept (SLASH-US-1, ADR-10)", () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId("composer-send"));
     });
+    await waitFor(() => expect(routerPush).toHaveBeenCalled());
     expect(chatBodies).toHaveLength(0);
-    expect(routerPush).toHaveBeenCalled();
     const dest = String(routerPush.mock.calls[0]![0]);
     expect(dest).toMatch(/pokedex|dex/i);
   });

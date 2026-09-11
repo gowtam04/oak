@@ -1,5 +1,5 @@
 /**
- * src/data/repos/usage-repo.ts — the SOLE writer for the two append-only
+ * src/data/repos/usage-repo.ts — the SOLE INSERT writer for the two
  * admin-panel recording tables (`turn_record`, `auth_event`).
  *
  * Design refs:
@@ -7,7 +7,10 @@
  *       § Data Model (turn_record, auth_event)
  *       § Component Design › "1. Usage recording (write path)"
  *       § Interface Definitions › usage-repo (these exact signatures)
- *       § Technical Decisions AD-3 (store full content), AD-4 (rate_limited row)
+ *       § Technical Decisions AD-4 (rate_limited row). AD-3 (store full
+ *         content indefinitely) is superseded by B-26: inserts may omit
+ *         `answer_json` when conversation persist already has the card;
+ *         a separate retention writer later strips fat columns.
  *   - requirements.md ADMIN-US-6, ADMIN-AC-6.1/6.2, ADMIN-BR-6.
  *
  * Boundary rules (CLAUDE.md "repos are the sole Postgres readers/writers"):
@@ -18,9 +21,9 @@
  *     Interface-Definitions shapes. Epoch-ms timestamps are `bigint` mode
  *     "number".
  *
- * APPEND-ONLY: both functions are INSERT-only — these rows are written once and
- * never updated or deleted (the panel only reads them). They are always invoked
- * fire-and-forget as `void recordX(...).catch(logOnly)` and are NEVER awaited on
+ * INSERT-ONLY HERE: both functions INSERT and never UPDATE/DELETE. Retention
+ * stripping lives in `turn-record-retention.ts`, not this module. Callers
+ * fire-and-forget as `void recordX(...).catch(logOnly)` and NEVER await on
  * the user's chat/auth critical path (ADMIN-BR-3); a write fault therefore
  * propagates to the caller's `.catch` rather than being swallowed here.
  */
@@ -80,6 +83,13 @@ export interface TurnRecordInput {
   promptText: string;
   answerText: string | null;
   answer: unknown | null; // OakAnswer; the repo JSON.stringifies into answer_json
+  /**
+   * Logical FK → conversation_message.id of the assistant row. Set on signed-in
+   * completed turns whose persist succeeded so admin getTurn can join instead
+   * of dual-storing OakAnswer. Null/omitted for guests, refusals, persist
+   * failures.
+   */
+  assistantMessageId?: string | null;
   createdAt: number; // epoch ms
 }
 
@@ -116,6 +126,7 @@ export async function recordTurn(input: TurnRecordInput): Promise<void> {
     prompt_text: input.promptText,
     answer_text: input.answerText,
     answer_json: input.answer == null ? null : JSON.stringify(input.answer),
+    assistant_message_id: input.assistantMessageId ?? null,
     created_at: input.createdAt,
   });
 }

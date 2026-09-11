@@ -97,7 +97,24 @@ struct ComposerView: View {
           .foregroundStyle(Theme.danger)
           .frame(maxWidth: .infinity, alignment: .leading)
       }
-      MentionAutocomplete(suggestions: model.mentionSuggestions, onPick: model.insertMention)
+      if !model.isSlashPickerVisible {
+        MentionAutocomplete(suggestions: model.mentionSuggestions, onPick: model.insertMention)
+      }
+      if model.isSlashPickerVisible {
+        SlashAutocomplete(
+          commands: slashCommandRows,
+          names: model.slashNameRows,
+          teams: model.slashTeamRows,
+          empty: model.slashEmptyCopy,
+          isGuest: !model.isSignedIn,
+          caption: model.slashCaption,
+          skipMove: model.slashShowSkipMove,
+          onPickCommand: model.insertSlashCommand,
+          onPickName: model.insertSlashName,
+          onPickTeam: model.insertSlashTeam,
+          onSkipMove: model.insertSlashSkipMove
+        )
+      }
 
       thumbnailRow(model: model)
 
@@ -152,6 +169,7 @@ struct ComposerView: View {
     }
     .onChange(of: model.composerText) { _, _ in
       isAttachDialogPresented = false
+      model.updateSlashPicker()
       model.updateMentionQuery()
     }
     .confirmationDialog("Attach Image", isPresented: $isAttachDialogPresented, titleVisibility: .hidden) {
@@ -210,6 +228,13 @@ struct ComposerView: View {
     } message: {
       Text("Sign in to use voice mode.")
     }
+  }
+
+  private var slashCommandRows: [SlashCommandRow] {
+    if case .commands(_, let rows) = SlashPicker.phase(model.composerText) {
+      return rows
+    }
+    return []
   }
 
   // MARK: Derived attach state

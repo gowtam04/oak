@@ -382,7 +382,10 @@ struct ChatView: View {
             }
             .padding(Theme.Spacing.lg)
             .frame(minHeight: geo.size.height, alignment: .top)
-            .oakDismissesComposerKeyboard { composerFocused = false }
+            .oakDismissesComposerKeyboard {
+              composerFocused = false
+              model.dismissSlashPicker()
+            }
           } else {
             VStack(spacing: 0) {
               PinStripView(
@@ -421,7 +424,10 @@ struct ChatView: View {
             }
             .padding(Theme.Spacing.lg)
             .frame(minHeight: geo.size.height, alignment: .bottom)
-            .oakDismissesComposerKeyboard { composerFocused = false }
+            .oakDismissesComposerKeyboard {
+              composerFocused = false
+              model.dismissSlashPicker()
+            }
           }
         }
         .background(Theme.canvas)

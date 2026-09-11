@@ -151,7 +151,7 @@ export const reference_cache = pgTable(
     resource_kind: text("resource_kind").notNull(),
     /** Normalized detail shape the tool returns (JSON string, not raw source). */
     payload: text("payload").notNull(),
-    /** Source label for citations (e.g. "@pkmn/dex (Pokémon Showdown)"). */
+    /** Source label for citations (e.g. "Pokémon Showdown <sha> (@pkmn/dex overlay)"). */
     endpoint_url: text("endpoint_url").notNull(),
     /** Epoch milliseconds the row was built (informational; no TTL anymore). */
     fetched_at: bigint("fetched_at", { mode: "number" }).notNull(),
@@ -577,13 +577,15 @@ export const team = pgTable(
 // ===========================================================================
 // Admin panel — usage recording (docs/features/admin-panel § Data Model)
 //
-// Two APPEND-ONLY tables that back the read-only admin/observability panel
-// (ADMIN-US-6). Written once on a NON-BLOCKING, fire-and-forget path
-// (ADMIN-BR-3) and NEVER updated; the panel only reads them. Like the
-// auth/chat/team tables these are GLOBAL (no `format` column — `mode` is a
-// per-row property), epoch-ms timestamps are `bigint` mode "number", JSON is
-// stored whole as TEXT, FKs are logical (un-constrained) indexed columns, and
-// indexes target the panel's query patterns. No existing table is altered.
+// Two recording tables that back the read-only admin/observability panel
+// (ADMIN-US-6). Inserts are fire-and-forget (ADMIN-BR-3) and append-only
+// from the chat/auth path. A separate retention writer (B-26) may later
+// strip fat columns on `turn_record` after the guest/signed-in windows;
+// analytics columns stay. Like the auth/chat/team tables these are GLOBAL
+// (no `format` column — `mode` is a per-row property), epoch-ms timestamps
+// are `bigint` mode "number", JSON is stored whole as TEXT, FKs are logical
+// (un-constrained) indexed columns, and indexes target the panel's query
+// patterns.
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -653,10 +655,22 @@ export const turn_record = pgTable(
     client: text("client"),
     /** The user message (searchable; empty when image-only). */
     prompt_text: text("prompt_text").notNull().default(""),
-    /** `answer_markdown` (searchable; null for "rate_limited"). */
+    /** `answer_markdown` (searchable; null for "rate_limited" / stripped). */
     answer_text: text("answer_text"),
-    /** Full `OakAnswer` JSON for drill-down re-render (null for "rate_limited"). */
+    /**
+     * Full `OakAnswer` JSON for drill-down re-render. Null for rate_limited /
+     * spend refusals, signed-in turns whose conversation persist succeeded
+     * (admin joins via `assistant_message_id`), persist-failed fallbacks after
+     * the retention window, and stripped rows (B-26).
+     */
     answer_json: text("answer_json"),
+    /**
+     * Logical FK → conversation_message.id of the assistant row for this turn.
+     * Null for guests, refusals, pre-column rows, and persist failures. No
+     * physical FK (repo convention). Admin getTurn joins this when answer_json
+     * is absent so signed-in cards are not dual-stored on turn_record.
+     */
+    assistant_message_id: text("assistant_message_id"),
     /** Epoch ms; the primary time dimension for all series/rollups. */
     created_at: bigint("created_at", { mode: "number" }).notNull(),
   },
@@ -671,6 +685,8 @@ export const turn_record = pgTable(
     index("turn_record_status_created_idx").on(t.status, t.created_at),
     // Cost-by-model.
     index("turn_record_model_created_idx").on(t.model, t.created_at),
+    // Admin getTurn join fallback (signed-in card lives on conversation_message).
+    index("turn_record_assistant_message_idx").on(t.assistant_message_id),
   ],
 );
 

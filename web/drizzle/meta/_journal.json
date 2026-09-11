@@ -169,6 +169,13 @@
       "when": 1784600000000,
       "tag": "0023_champions_only",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784700000000,
+      "tag": "0024_turn_record_assistant_message",
+      "breakpoints": true
     }
   ]
 }

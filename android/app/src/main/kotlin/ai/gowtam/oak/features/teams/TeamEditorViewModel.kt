@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * A mutable, form-bindable EV/IV spread + slug fields for one member slot. The wire
@@ -109,6 +111,17 @@ data class EditableMember(
 @Immutable
 data class TeamDraftSnapshot(val name: String, val members: List<EditableMember>)
 
+/** Wire payload used for dirty-checking autosave. Compares legalized members, not UI ids. */
+private data class PersistableDraft(val name: String?, val members: List<TeamMember>)
+
+private fun persistable(name: String, members: List<EditableMember>): PersistableDraft {
+    val trimmed = name.trim()
+    return PersistableDraft(
+        name = trimmed.ifEmpty { null },
+        members = members.map { it.asTeamMember() },
+    )
+}
+
 /** The single renderable snapshot the editor screen collects. */
 @Immutable
 data class TeamEditorUiState(
@@ -141,8 +154,9 @@ data class TeamEditorUiState(
 /**
  * The full-set team editor's view model (history-and-teams.md D-TEAM-1;
  * component-design.md "TeamEditorViewModel"). Holds the editable team (name + up to 6
- * member sets), drives save (create-or-update), and surfaces the server's
- * **warn-but-allow** validation — warnings are rendered but **never block save**.
+ * member sets), drives **debounced autosave** (create-or-update), and surfaces the
+ * server's **warn-but-allow** validation — warnings are rendered but **never block
+ * save**. There is no Save button: every draft change persists automatically.
  *
  * `viewModelScope`-driven, `StateFlow<TeamEditorUiState>`-published (mirrors
  * [ai.gowtam.oak.features.artifact.ArtifactViewModel]/[ai.gowtam.oak.features.chat.ChatViewModel],
@@ -175,6 +189,17 @@ class TeamEditorViewModel private constructor(
 
     /** The pending debounce timer for [scheduleAnalysis]; cancelled/relaunched on each edit. */
     private var analysisDebounceJob: Job? = null
+
+    /** Debounce window before an autosave fires. Tests collapse this to 0. */
+    var saveDebounceMs: Long = SAVE_DEBOUNCE_MS
+
+    private var saveDebounceJob: Job? = null
+    private var persistJob: Job? = null
+    private val persistMutex = Mutex()
+    private var forcePersist = false
+    private var persistFailed = false
+    private var lastPersisted: PersistableDraft =
+        persistable(initialState.name, initialState.members)
 
     /**
      * Monotonic token stamping each analysis request. The response handler discards any
@@ -305,14 +330,17 @@ class TeamEditorViewModel private constructor(
      * filled slot's item to its species' `required_item` once resolved — forward-only
      * and idempotent (never clears a stone if the species changes away from a Mega). */
     private fun applyMegaAutoForce() {
+        var changed = false
         _uiState.update { state ->
             val refs = state.spriteRefsBySpecies
             val updated = state.members.map { member ->
                 val stone = refs[member.species]?.requiredItem?.takeIf { it.isNotBlank() }
                 if (stone != null && member.item != stone) member.copy(item = stone) else member
             }
+            changed = updated != state.members
             state.copy(members = updated)
         }
+        if (changed) scheduleSave()
     }
 
     private suspend fun doRefreshMovepool(memberId: String) {
@@ -345,13 +373,18 @@ class TeamEditorViewModel private constructor(
     fun setName(name: String) {
         if (isReadOnly) return
         _uiState.update { it.copy(name = name) }
+        scheduleSave()
     }
 
     /** Adds an empty member set; a no-op at the 6-slot cap. */
     fun addMember() {
         if (isReadOnly) return
+        val before = uiState.value.members.size
         _uiState.update { if (it.members.size < 6) it.copy(members = it.members + EditableMember()) else it }
-        scheduleAnalysis()
+        if (uiState.value.members.size != before) {
+            scheduleAnalysis()
+            scheduleSave()
+        }
     }
 
     fun removeMember(index: Int) {
@@ -364,6 +397,23 @@ class TeamEditorViewModel private constructor(
             }
         }
         scheduleAnalysis()
+        scheduleSave()
+    }
+
+    /** Moves the member at [from] to [to] (insert, not swap). A no-op when
+     * read-only, the indices match, or either index is out of bounds. Row
+     * identity is preserved so cached movepools stay attached. */
+    fun moveMember(from: Int, to: Int) {
+        if (isReadOnly) return
+        if (from == to) return
+        val members = uiState.value.members
+        if (from !in members.indices || to !in members.indices) return
+        val next = members.toMutableList()
+        val item = next.removeAt(from)
+        next.add(to, item)
+        _uiState.update { it.copy(members = next) }
+        scheduleAnalysis()
+        scheduleSave()
     }
 
     val canAddMember: Boolean get() = !isReadOnly && uiState.value.members.size < 6
@@ -383,6 +433,7 @@ class TeamEditorViewModel private constructor(
             refreshMovepool(updated.id)
         }
         scheduleAnalysis()
+        scheduleSave()
     }
 
     fun warningsForSlot(index: Int): List<TeamWarning> = uiState.value.warnings.filter { it.slot == index }
@@ -448,39 +499,101 @@ class TeamEditorViewModel private constructor(
         }
     }
 
-    // ---- Save (warn-but-allow — never blocked) ----
+    // ---- Autosave (warn-but-allow — never blocked) ----
+
+    /** Debounced persist of the current draft. Rapid edits coalesce. A no-op when
+     * read-only or when the draft matches the last successful persist. */
+    fun scheduleSave() {
+        if (isReadOnly) return
+        persistFailed = false
+        saveDebounceJob?.cancel()
+        saveDebounceJob = viewModelScope.launch {
+            delay(saveDebounceMs)
+            kickPersist()
+        }
+    }
+
+    /** Cancels the debounce window and persists immediately (leave / background / export). */
+    suspend fun flushSave() {
+        if (isReadOnly) return
+        saveDebounceJob?.cancel()
+        persistFailed = false
+        if (persistableSnapshot() != lastPersisted) forcePersist = true
+        kickPersist()
+        persistJob?.join()
+        if (persistableSnapshot() != lastPersisted && !persistFailed) {
+            kickPersist()
+            persistJob?.join()
+        }
+    }
+
+    /** Fire-and-forget flush for lifecycle callbacks that cannot suspend. */
+    fun flushSaveAsync() {
+        viewModelScope.launch { flushSave() }
+    }
 
     /** Saves the team (create when new, replace when existing). **Never blocked by
-     * warnings**: the request always goes out, and the returned warnings are shown
-     * afterward. */
+     * warnings**. Explicit write used by tests; always issues the request. */
     fun save() {
         if (isReadOnly) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true, errorMessage = null) }
-            val memberPayload = uiState.value.members.map { it.asTeamMember() }
-            val trimmedName = uiState.value.name.trim()
-            val namePayload = trimmedName.ifEmpty { null }
+            persistFailed = false
+            forcePersist = true
+            kickPersist()
+            persistJob?.join()
+        }
+    }
+
+    private fun kickPersist() {
+        if (isReadOnly) return
+        if (persistJob?.isActive == true) return
+        persistJob = viewModelScope.launch {
             try {
-                val teamId = uiState.value.teamId
-                val (team, validation) = if (teamId != null) {
-                    teamService.update(teamId, namePayload, memberPayload)
-                } else {
-                    teamService.create(format, namePayload, memberPayload)
-                }
-                applySaved(team, validation)
-                doRefreshSprites()
-                doRefreshAllMovepools()
-                scheduleAnalysis()
-                _uiState.update { it.copy(showSaveConfirmation = true) }
-            } catch (e: OakError) {
-                _uiState.update { it.copy(errorMessage = message(e)) }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = GENERIC_MESSAGE) }
+                runPersistLoop()
             } finally {
-                _uiState.update { it.copy(isSaving = false) }
+                persistJob = null
             }
         }
     }
+
+    private suspend fun runPersistLoop() {
+        persistMutex.withLock {
+            while (!isReadOnly) {
+                val snapshot = persistableSnapshot()
+                if (snapshot == lastPersisted && !forcePersist) return
+                forcePersist = false
+                if (!persist(snapshot)) return
+            }
+        }
+    }
+
+    private suspend fun persist(snapshot: PersistableDraft): Boolean {
+        _uiState.update { it.copy(isSaving = true, errorMessage = null) }
+        return try {
+            val teamId = uiState.value.teamId
+            val (team, validation) = if (teamId != null) {
+                teamService.update(teamId, snapshot.name, snapshot.members)
+            } else {
+                teamService.create(format, snapshot.name, snapshot.members)
+            }
+            persistFailed = false
+            applySaveResult(team, validation, snapshot)
+            true
+        } catch (e: OakError) {
+            persistFailed = true
+            _uiState.update { it.copy(errorMessage = message(e)) }
+            false
+        } catch (e: Exception) {
+            persistFailed = true
+            _uiState.update { it.copy(errorMessage = GENERIC_MESSAGE) }
+            false
+        } finally {
+            _uiState.update { it.copy(isSaving = false) }
+        }
+    }
+
+    private fun persistableSnapshot(): PersistableDraft =
+        persistable(uiState.value.name, uiState.value.members)
 
     /** Clears the transient "Saved" badge; the screen calls this after its ~1s display window. */
     fun consumeSaveConfirmation() {
@@ -489,15 +602,16 @@ class TeamEditorViewModel private constructor(
 
     // ---- Export ----
 
-    /** Renders the saved team as Showdown paste text. Requires a saved team (an id); for
-     * an unsaved team it surfaces a hint instead. */
+    /** Renders the saved team as Showdown paste text. Flushes a pending autosave first
+     * so a just-edited new team can export without a Save tap. */
     fun exportPaste() {
-        val id = uiState.value.teamId
-        if (id == null) {
-            _uiState.update { it.copy(errorMessage = "Save the team before exporting.") }
-            return
-        }
         viewModelScope.launch {
+            flushSave()
+            val id = uiState.value.teamId
+            if (id == null) {
+                _uiState.update { it.copy(errorMessage = "Save the team before exporting.") }
+                return@launch
+            }
             try {
                 val paste = teamService.exportPaste(id)
                 _uiState.update { it.copy(exportedPaste = paste) }
@@ -527,8 +641,8 @@ class TeamEditorViewModel private constructor(
      * assistant Apply so [restoreDraft] (Undo) can put it back verbatim. */
     fun draftSnapshot(): TeamDraftSnapshot = TeamDraftSnapshot(uiState.value.name, uiState.value.members)
 
-    /** Restores a draft snapshot (assistant Undo). Nothing here touches the DB — the
-     * user still reviews and Saves. Sprites/movepools re-resolve for the restored rows. */
+    /** Restores a draft snapshot (assistant Undo). Sprites/movepools re-resolve; autosave
+     * persists the restored draft. */
     fun restoreDraft(snapshot: TeamDraftSnapshot) {
         _uiState.update { it.copy(name = snapshot.name, members = snapshot.members) }
         viewModelScope.launch {
@@ -536,12 +650,11 @@ class TeamEditorViewModel private constructor(
             doRefreshAllMovepools()
         }
         scheduleAnalysis()
+        scheduleSave()
     }
 
-    /** Applies an assistant [TeamPatch] to the in-memory draft (mirrors the web panel's
-     * Apply: [applyTeamPatch] on the current members + an optional rename). The DB is
-     * untouched — the patched rows land in the editor's unsaved state and the user still
-     * hits Save. The slot edits reuse the exact pure [applyTeamPatch] the server
+    /** Applies an assistant [TeamPatch] to the in-memory draft. Autosave persists the
+     * patched rows. The slot edits reuse the exact pure [applyTeamPatch] the server
      * legality-gate ran, so applied ≡ validated. */
     fun applyAssistantPatch(patch: TeamPatch) {
         if (isReadOnly) return
@@ -557,12 +670,13 @@ class TeamEditorViewModel private constructor(
             doRefreshAllMovepools()
         }
         scheduleAnalysis()
+        scheduleSave()
     }
 
     // ---- Internals ----
 
-    /** Adopts a server-returned team as the editor's canonical state — the server may
-     * normalize fields, so the editable rows are rebuilt from the saved members. */
+    /** Adopts a server-returned team as the editor's canonical state on **load** — the
+     * server may normalize fields, so the editable rows are rebuilt from the saved members. */
     private fun applySaved(team: Team, warnings: List<TeamWarning>) {
         _uiState.update {
             it.copy(
@@ -573,6 +687,23 @@ class TeamEditorViewModel private constructor(
                 warnings = warnings,
             )
         }
+        lastPersisted = persistableSnapshot()
+    }
+
+    /** Autosave success: keep the live draft (and member ids) intact so focus, steppers,
+     * and pickers do not reset. */
+    private fun applySaveResult(team: Team, warnings: List<TeamWarning>, sent: PersistableDraft) {
+        val nameWasEmpty = uiState.value.name.trim().isEmpty()
+        _uiState.update {
+            it.copy(
+                teamId = team.id,
+                savedTeam = team,
+                warnings = warnings,
+                name = if (nameWasEmpty) team.name else it.name,
+                showSaveConfirmation = true,
+            )
+        }
+        lastPersisted = if (nameWasEmpty) sent.copy(name = team.name) else sent
     }
 
     companion object {
@@ -599,6 +730,9 @@ class TeamEditorViewModel private constructor(
 
         /** Debounce window collapsing rapid draft edits into one analysis request. */
         const val ANALYSIS_DEBOUNCE_MS = 750L
+
+        /** Debounce window collapsing rapid draft edits into one persist request. */
+        const val SAVE_DEBOUNCE_MS = 600L
 
         const val CONNECTION_MESSAGE = "No connection. Check your network and try again."
         const val SESSION_EXPIRED_MESSAGE = "Your session expired. Please sign in again."

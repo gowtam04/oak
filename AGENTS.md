@@ -137,7 +137,7 @@ npm run typecheck    # tsc --noEmit
 npm run lint         # eslint .
 npm test             # vitest run (unit + integration + deterministic eval subset) — NEEDS Docker (Testcontainers Postgres)
 npm run db:migrate   # tsx src/data/migrate.ts — apply Drizzle migrations to $DATABASE_URL
-npm run ingest       # tsx src/ingest/run.ts — (re)build the Champions Postgres index from @pkmn (runs migrations first)
+npm run ingest       # tsx src/ingest/run.ts — (re)build the Champions Postgres index from the Showdown pin (runs migrations first)
 npm run eval         # tsx eval/run.ts — full LLM-judge golden suite (live model)
 ```
 
@@ -177,10 +177,12 @@ Node 20+ is required (`.nvmrc`). `typecheck`, `lint`, and the jsdom component
 tests run with no Docker; **`npm test` (the node project) needs a running
 Docker daemon** — Testcontainers spins up an ephemeral `postgres:16` for the
 run. The full judged `eval` needs **both** a real `XAI_API_KEY` (the agent runs
-on Grok) and a real `ANTHROPIC_API_KEY` (the judge runs on Claude). `@pkmn` is
-a local package, so `ingest` never hits the network (but it does need a
-reachable Postgres via `DATABASE_URL`). Live Champions usage (T15) is the
-request-time network read — not a DB writer.
+on Grok) and a real `ANTHROPIC_API_KEY` (the judge runs on Claude). Champions
+ingest reads the vendored Showdown pin (`web/vendor/pokemon-showdown/`) plus
+`@pkmn/dex` as the overlay engine — no network (but it does need a reachable
+Postgres via `DATABASE_URL`). Live Champions usage (T15) is the request-time
+network read — not a DB writer. Do not bump npm `@pkmn/mods` as the roster
+clock; see `docs/features/champions-first/regulation-cutover.md`.
 
 ## Architecture
 
@@ -233,16 +235,23 @@ POST /api/chat (SSE)  →  runOak (tool-loop)  →  17 tools  →  repos  →  P
   throw in-domain**. `index.ts` is the barrel exporting `tools` and `dispatch`.
   Voice excludes only `submit_answer` (`VOICE_EXCLUDED_TOOLS`).
 
-### Data layer — built from `@pkmn`, not PokeAPI
+### Data layer — Champions index from the Showdown pin, not PokeAPI
 
-The design's throttled PokeAPI crawler was **replaced by the `@pkmn`
-ecosystem**. All index data is built offline from local npm packages.
+The design's throttled PokeAPI crawler was **replaced by `@pkmn/dex` + a
+pinned Showdown SHA**. Champions roster bytes come from
+`web/vendor/pokemon-showdown/` at `SHOWDOWN_PIN`
+(`src/data/pkmn/showdown-pin.ts`). **`@pkmn/dex` is the Dex.mod / Dex.forGen
+engine** (and historical gen-scope). **npm `@pkmn/mods` is not the regulation
+clock.** Cutover: `docs/features/champions-first/regulation-cutover.md`.
 
-- **`src/data/pkmn/gen-provider.ts`** is the *single* `@pkmn` integration point.
+- **`src/data/pkmn/gen-provider.ts`** is the *single* `@pkmn` / Showdown-pin
+  integration point.
 - **Ingest** (`src/ingest/run.ts`) builds **Champions only**
-  (`DEFAULT_FORMATS = ["champions"]`), then replaces each table in one async
-  transaction. Idempotent. It runs under `tsx` as its own process, opens its
-  **own** `pg.Pool` over `DATABASE_URL`, and applies migrations before writing.
+  (`DEFAULT_FORMATS = ["champions"]`) from that pin, then replaces each table
+  in one async transaction. Idempotent. It runs under `tsx` as its own
+  process, opens its **own** `pg.Pool` over `DATABASE_URL`, and applies
+  migrations before writing. Ingest never fetches Showdown; only
+  `scripts/sync-showdown-pin.sh` does.
 - **Postgres via Drizzle + node-postgres** (`src/data/schema.ts`,
   `src/data/db.ts`). `db.ts` is `server-only` and memoizes one `pg.Pool` +
   Drizzle handle on `globalThis`. Migrations are **not** run on connect —
@@ -362,6 +371,11 @@ deterministic subset lives in `eval/deterministic.ts` (no `RunSqlRows`).
   applied on connect. Run `npm run db:migrate` then `npm run ingest` (or
   `npm run docker:ingest`). Ingest default is Champions; a stale/empty DB
   reads as `index_unavailable`.
+- **Champions roster clock is the Showdown pin, not `npm update @pkmn/mods`.**
+  Refresh vendor bytes with `./scripts/sync-showdown-pin.sh <sha>` from `web/`,
+  run the gate tests, ingest, then flip `CHAMPIONS_REGULATION`. Do not
+  chip-flip if gates fail (half-mod = lie). Runbook:
+  `docs/features/champions-first/regulation-cutover.md`.
 - **`resolve_entity` (resolve-index) reads the `@/data/db` singleton, not
   `ctx.db`.** Tests that exercise resolution must `installAsSingleton(fix)`.
 - **Don't force `tool_choice` while thinking is on.** Thinking + a forced

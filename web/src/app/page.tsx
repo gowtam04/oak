@@ -47,7 +47,22 @@ import {
 } from "@/lib/api/history-client";
 import { listTeams, type TeamSummary } from "@/lib/api/teams-client";
 import { createShare } from "@/lib/api/share-client";
-import { parseSlashCommand } from "@/lib/chat/slash-commands";
+import {
+  parseSlashCommand,
+  slashArg,
+  type DexBind,
+} from "@/lib/chat/slash-commands";
+import { bindStillValid, type DexNameRow } from "@/lib/chat/slash-picker";
+import {
+  emptyCalcScenario,
+  resolveCalcScenario,
+  type CalcBind,
+} from "@/lib/chat/slash-calc";
+import {
+  searchSlashDex,
+  searchSlashMove,
+  searchSlashUsage,
+} from "@/lib/chat/slash-search";
 import type { FollowUpChip } from "@/lib/chat/follow-up-chips";
 import { parseMentions } from "@/lib/chat/mentions";
 import { isFormat, regulationChipLabel, type Format } from "@/data/formats";
@@ -183,10 +198,54 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function slashArg(text: string): string {
-  const trimmed = text.trim();
-  const space = trimmed.search(/\s/);
-  return space === -1 ? "" : trimmed.slice(space).trim();
+function dexPathForKind(kind: DexBind["kind"]): string {
+  switch (kind) {
+    case "pokemon":
+      return "/pokedex";
+    case "move":
+      return "/moves";
+    case "ability":
+      return "/abilities";
+    case "item":
+      return "/items";
+  }
+}
+
+function dexEntityHref(kind: DexBind["kind"], slug: string): string {
+  return `${dexPathForKind(kind)}/${encodeURIComponent(slug)}`;
+}
+
+/** First exact displayName or slug in Pokémon→move→ability→item order. */
+function matchNameRow(
+  rows: { slug: string; displayName: string; kind: DexBind["kind"] }[],
+  arg: string,
+) {
+  const needle = arg.toLowerCase();
+  return rows.find(
+    (row) =>
+      row.displayName.toLowerCase() === needle ||
+      row.slug.toLowerCase() === needle,
+  );
+}
+
+const SLASH_SEND_SEARCH_MS = 2000;
+
+async function boundedSlashSearch(
+  run: (signal: AbortSignal) => Promise<DexNameRow[]>,
+): Promise<DexNameRow[]> {
+  const ac = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<DexNameRow[]>((resolve) => {
+    timeoutId = setTimeout(() => {
+      ac.abort();
+      resolve([]);
+    }, SLASH_SEND_SEARCH_MS);
+  });
+  try {
+    return await Promise.race([run(ac.signal), timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -348,6 +407,7 @@ export default function Home() {
   const lastUserImagesRef = useRef<PendingImage[]>([]);
   const lastUserTurnIdRef = useRef<string | null>(null);
   const recoveryRef = useRef<"retry" | "edit" | null>(null);
+  const slashHopGen = useRef(0);
   const [undoTurnId, setUndoTurnId] = useState<string | null>(null);
   const [imagesMissing, setImagesMissing] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
@@ -643,18 +703,70 @@ export default function Home() {
   }, [reset]);
 
   const handleSlash = useCallback(
-    (target: "new" | "team" | "dex" | "usage", text: string) => {
+    async (
+      target: "new" | "team" | "dex" | "usage",
+      text: string,
+      images: PendingImage[],
+      slashMeta?: { dexBind?: DexBind; argRows?: DexNameRow[] },
+    ) => {
+      const gen = ++slashHopGen.current;
       const arg = slashArg(text);
+      const dexBind = slashMeta?.dexBind;
       if (target === "new") {
         handleNewChat();
+        setPrefill({ text: "", images });
         return;
       }
       if (target === "dex") {
-        navigateTo(arg ? `/pokedex/${slugify(arg)}` : "/pokedex");
+        setPrefill({ text: "", images });
+        let href = "/pokedex";
+        if (arg) {
+          const bind =
+            dexBind && bindStillValid(dexBind, text) ? dexBind : undefined;
+          if (bind) {
+            href = dexEntityHref(bind.kind, bind.slug);
+          } else if (slashMeta?.argRows) {
+            const hit = matchNameRow(slashMeta.argRows, arg);
+            if (hit) href = dexEntityHref(hit.kind, hit.slug);
+          } else {
+            const rows = await boundedSlashSearch((signal) =>
+              searchSlashDex(arg, signal),
+            );
+            if (gen !== slashHopGen.current) return;
+            const hit = matchNameRow(rows, arg);
+            if (hit) href = dexEntityHref(hit.kind, hit.slug);
+          }
+        }
+        if (gen !== slashHopGen.current) return;
+        navigateTo(href);
         return;
       }
       if (target === "usage") {
-        navigateTo("/meta");
+        setPrefill({ text: "", images });
+        let href = "/usage";
+        if (arg) {
+          const boundSpecies =
+            dexBind &&
+            dexBind.kind === "pokemon" &&
+            dexBind.displayName.toLowerCase() === arg.toLowerCase()
+              ? dexBind
+              : undefined;
+          if (boundSpecies) {
+            href = `/usage/${encodeURIComponent(boundSpecies.slug)}`;
+          } else if (slashMeta?.argRows) {
+            const hit = matchNameRow(slashMeta.argRows, arg);
+            if (hit) href = `/usage/${encodeURIComponent(hit.slug)}`;
+          } else {
+            const rows = await boundedSlashSearch((signal) =>
+              searchSlashUsage(arg, signal),
+            );
+            if (gen !== slashHopGen.current) return;
+            const hit = matchNameRow(rows, arg);
+            if (hit) href = `/usage/${encodeURIComponent(hit.slug)}`;
+          }
+        }
+        if (gen !== slashHopGen.current) return;
+        navigateTo(href);
         return;
       }
       if (arg) {
@@ -665,23 +777,57 @@ export default function Home() {
       } else {
         navigateTo("/teams");
       }
+      setPrefill({ text: "", images });
     },
     [handleNewChat, navigateTo, teams.teams],
   );
 
   const handleSend = useCallback(
-    (message: string, images: PendingImage[] = []) => {
+    (
+      message: string,
+      images: PendingImage[] = [],
+      slashMeta?: { dexBind?: DexBind; argRows?: DexNameRow[]; calcBind?: CalcBind },
+    ) => {
       const slash = parseSlashCommand(message, { hasUsagePage: true });
-      if (slash.type === "navigate" && recoveryRef.current !== "edit") {
-        handleSlash(slash.target, message);
-        return;
+      if (recoveryRef.current !== "edit") {
+        if (slash.type === "help" || slash.type === "bare") {
+          slashHopGen.current += 1;
+          setPrefill({ text: "/", images });
+          return;
+        }
+        if (slash.type === "navigate") {
+          void handleSlash(slash.target, message, images, slashMeta);
+          return;
+        }
+        if (slash.type === "calc") {
+          const gen = ++slashHopGen.current;
+          setPrefill({ text: "", images });
+          if (!slash.rest) {
+            setCalcRest("");
+            setCalcScenario(emptyCalcScenario());
+            setCalcOpen(true);
+            return;
+          }
+          void resolveCalcScenario({
+            rest: slash.rest,
+            bind: slashMeta?.calcBind ?? null,
+            search: (kind, query) =>
+              boundedSlashSearch((signal) =>
+                kind === "move"
+                  ? searchSlashMove(query, signal)
+                  : searchSlashUsage(query, signal),
+              ),
+          }).then((scenario) => {
+            if (gen !== slashHopGen.current) return;
+            setCalcRest("");
+            setCalcScenario(scenario);
+            setCalcOpen(true);
+          });
+          return;
+        }
       }
-      if (slash.type === "calc" && recoveryRef.current !== "edit") {
-        setCalcRest(slash.rest);
-        setCalcScenario(undefined);
-        setCalcOpen(true);
-        return;
-      }
+
+      slashHopGen.current += 1;
 
       const parsedMentions = auth.signedIn
         ? parseMentions(message, teams.teams)

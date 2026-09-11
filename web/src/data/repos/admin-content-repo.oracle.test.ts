@@ -37,7 +37,8 @@
  *     6-pack), full detail, null.
  */
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { inArray } from "drizzle-orm";
 
 // admin-content-repo.ts / db.ts `import "server-only"` (throws under node).
 // Neutralize it; the real Postgres handle is supplied via installAsSingleton.
@@ -479,6 +480,14 @@ describe("listTurns", () => {
 // ---------------------------------------------------------------------------
 
 describe("getTurn", () => {
+  const B26_IDS = ["tr-b26-join", "tr-b26-stripped"] as const;
+
+  afterEach(async () => {
+    await fix.db
+      .delete(turn_record)
+      .where(inArray(turn_record.id, [...B26_IDS]));
+  });
+
   it("returns the full record with parsed tool_trace + answer json + cost", async () => {
     const turn = await repo.getTurn("tr-01");
     expect(turn).not.toBeNull();
@@ -505,6 +514,94 @@ describe("getTurn", () => {
     expect(turn!.answerJson).toBeNull();
     expect(turn!.toolTrace).toEqual([]);
     expect(turn!.estUsd).toBe(0);
+  });
+
+  it("joins conversation_message when answer_json is null and assistant_message_id is set (B-26)", async () => {
+    await fix.db.insert(turn_record).values({
+      id: "tr-b26-join",
+      session_id: CONVERSATIONS.A2.id,
+      account_id: ACCOUNTS.A.id,
+      model: "grok-4.3",
+      provider_model: "grok-2",
+      mode: "champions",
+      status: "answered",
+      input_tokens: 111,
+      output_tokens: 22,
+      thinking_tokens: 3,
+      tool_trace: JSON.stringify([
+        {
+          tool: "get_pokemon",
+          args: {},
+          latency_ms: 4,
+          cache_hit: false,
+          error: null,
+        },
+      ]),
+      tool_error_count: 0,
+      citation_count: 1,
+      turn_latency_ms: 900,
+      images_count: 0,
+      prompt_text: "Tera type math for Fairy?",
+      answer_text: null,
+      answer_json: null,
+      assistant_message_id: "msg-A2-1",
+      created_at: BASE + GDAY * DAY,
+    });
+
+    const turn = await repo.getTurn("tr-b26-join");
+    expect(turn).not.toBeNull();
+    expect(turn!.answerText).toBe("Tera Fairy changes the defensive profile.");
+    expect(JSON.parse(turn!.answerJson!)).toMatchObject({
+      status: "answered",
+      answer_markdown: "Tera Fairy changes the defensive profile.",
+    });
+    expect(turn!.inputTokens).toBe(111);
+    expect(turn!.outputTokens).toBe(22);
+    expect(turn!.thinkingTokens).toBe(3);
+    expect(turn!.toolTrace).toHaveLength(1);
+    expect(turn!.accountEmail).toBe(ACCOUNTS.A.email);
+  });
+
+  it("returns a stripped row with null body and intact stats (B-26)", async () => {
+    await fix.db.insert(turn_record).values({
+      id: "tr-b26-stripped",
+      session_id: "sess-stripped",
+      account_id: null,
+      model: "grok-4.3",
+      provider_model: "grok-2",
+      mode: "champions",
+      status: "answered",
+      input_tokens: 400,
+      output_tokens: 80,
+      thinking_tokens: 10,
+      tool_trace: "[]",
+      tool_error_count: 2,
+      citation_count: 3,
+      turn_latency_ms: 1500,
+      images_count: 1,
+      prompt_text: "",
+      answer_text: null,
+      answer_json: null,
+      assistant_message_id: null,
+      created_at: BASE + GDAY * DAY,
+    });
+
+    const turn = await repo.getTurn("tr-b26-stripped");
+    expect(turn).not.toBeNull();
+    expect(turn!.answerText).toBeNull();
+    expect(turn!.answerJson).toBeNull();
+    expect(turn!.toolTrace).toEqual([]);
+    expect(turn!.promptText).toBe("");
+    expect(turn!.inputTokens).toBe(400);
+    expect(turn!.outputTokens).toBe(80);
+    expect(turn!.thinkingTokens).toBe(10);
+    expect(turn!.toolErrorCount).toBe(2);
+    expect(turn!.citationCount).toBe(3);
+    expect(turn!.turnLatencyMs).toBe(1500);
+    expect(turn!.imagesCount).toBe(1);
+    expect(turn!.status).toBe("answered");
+    expect(turn!.model).toBe("grok-4.3");
+    expect(turn!.estUsd).toBeGreaterThan(0);
   });
 
   it("returns null for an unknown id", async () => {

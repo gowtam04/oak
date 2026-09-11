@@ -304,6 +304,67 @@ class ChatViewModelReducerTest {
     }
 
     // -------------------------------------------------------------------
+    // Slash-discovery P4 — /help, bare `/`, /usage {slug} are not chat turns
+    // (SD-AC-4.3, SD-AC-7.1, SD-AC-5.7, SD-BR-2). Overlay/hop details live in
+    // SlashDiscoveryViewModelTest. Existing requestUsage() call sites must
+    // still compile after Usage becomes `data class Usage(val slug: String? = null)`.
+    // -------------------------------------------------------------------
+
+    @Test
+    fun slashHelpDoesNotPostAChatTurn() = runTest(mainDispatcherRule.dispatcher) {
+        val chat = FakeChatService()
+        val vm = newModel(chat)
+        vm.setComposerText("/help")
+
+        vm.send()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(chat.sendWithImagesCalls.isEmpty())
+        assertTrue(chat.sendRequestCalls.isEmpty())
+        assertEquals("/", vm.uiState.value.composerText)
+        assertTrue(vm.uiState.value.turns.isEmpty())
+        assertFalse(vm.uiState.value.isStreaming)
+    }
+
+    @Test
+    fun slashBareDoesNotPostAChatTurn() = runTest(mainDispatcherRule.dispatcher) {
+        val chat = FakeChatService()
+        val vm = newModel(chat)
+        vm.setComposerText("/")
+
+        vm.send()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(chat.sendWithImagesCalls.isEmpty())
+        assertTrue(chat.sendRequestCalls.isEmpty())
+        assertEquals("/", vm.uiState.value.composerText)
+        assertTrue(vm.uiState.value.turns.isEmpty())
+        assertFalse(vm.uiState.value.isStreaming)
+    }
+
+    @Test
+    fun slashUsageWithSlugDoesNotPostAChatTurn() = runTest(mainDispatcherRule.dispatcher) {
+        val chat = FakeChatService()
+        val vm = newModel(chat)
+        vm.setComposerText("/usage garchomp")
+
+        vm.send()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(chat.sendWithImagesCalls.isEmpty())
+        assertTrue(chat.sendRequestCalls.isEmpty())
+        assertTrue(vm.uiState.value.turns.isEmpty())
+        assertFalse(vm.uiState.value.isStreaming)
+    }
+
+    @Test
+    fun requestUsageWithNoArgsIsUsageIndex() {
+        val appState = AppState()
+        appState.requestUsage()
+        assertEquals(AppState.SurfaceRequest.Usage(slug = null), appState.surfaceRequest.value)
+    }
+
+    // -------------------------------------------------------------------
     // Spend-control banners (SC-AC-5.4 / SC-AC-6.5 / SC-BR-14)
     // Pre-stream HTTP refusals: 403 account_denied, 429 daily_limit (Http,
     // not RateLimited), 429 rate_limited (RateLimited). Denied/cap hide

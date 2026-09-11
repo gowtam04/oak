@@ -1,23 +1,27 @@
 /**
  * gen-provider.ts — the SINGLE @pkmn integration point for the ingest pipeline.
  *
- * After the migration, all index data comes from the @pkmn ecosystem (local npm
- * packages — no network, no throttle, no read-through cache):
+ * After the migration, mainline gen-scope index data comes from the @pkmn
+ * ecosystem (local npm packages — no network). Champions roster bytes come
+ * from a pinned Pokémon Showdown SHA under `web/vendor/pokemon-showdown/`;
+ * `@pkmn/dex` is only the overlay engine (`Dex.mod`):
  *   - standard (`scarlet-violet`)    ← `Dex.forGen(9)`
- *   - champions                      ← `Dex.mod('champions', @pkmn/mods/champions)`
+ *   - champions                      ← Showdown pin + `Dex.mod('champions', …)`
  *   - national-dex                   ← `Dex.forGen(9)` (same path as standard,
  *                                       under a new format name — no new branch
  *                                       needed; see loadFormat's else arm)
  *   - gen scopes (`gen-1`…`gen-8`)    ← `Dex.forGen(n)` (generation-scope feature)
  *
  * The ingest builders consume the `FormatSource` returned by {@link loadFormat}
- * and never import @pkmn directly, so every @pkmn-specific quirk lives here.
+ * and never import @pkmn or Showdown files directly, so every source-specific
+ * quirk lives here.
  *
- * Verified facts (probed against @pkmn/{dex,mods} 0.10.11):
+ * Verified facts:
  *   - The Champions legal roster is NOT `dex.species.all()` (that is the full
- *     ~876 gen-9 set). It lives in the mod's FormatsData: a species is legal iff
- *     its FormatsData entry has a falsy `isNonstandard`. That yields ~314 legal
- *     species including ~76 Megas (restricted legendaries excluded for Reg M-B).
+ *     national-dex set). It lives in the mod's FormatsData: a species is legal
+ *     iff its FormatsData entry has a falsy `isNonstandard`. Uber is still
+ *     legal. Restricted legendaries stay out. Roster size is hundreds (gated
+ *     >320 and <500), not the full dex.
  *   - `Dex.mod` applies the mod's ~259 move + 13 ability overrides, and Mega
  *     species resolve via `modDex.species.get('venusaurmega')`.
  *   - Champions learnsets via `modDex.learnsets.get(id)` are genuinely scoped.
@@ -54,6 +58,8 @@
 import { Dex, type ModData, type ID } from "@pkmn/dex";
 
 import { type Format, CHAMPIONS_FORMAT, genNumberForFormat } from "@/data/formats";
+import { SHOWDOWN_PIN } from "@/data/pkmn/showdown-pin";
+import { loadChampionsShowdownMod } from "@/data/pkmn/showdown-loader";
 
 /** The @pkmn dex flavor we use (gen-scoped or modded — same shape). */
 export type PkmnDex = ReturnType<typeof Dex.forGen>;
@@ -93,6 +99,11 @@ export interface FormatSource {
   natures: PkmnNature[];
   /** Per-species learnset: `{ moveid: sourceString[] }` (may be empty). */
   getLearnset(speciesId: string): Promise<Record<string, string[]>>;
+  /**
+   * Showdown git SHA that supplied Champions bytes. Unset on gen-scope
+   * `@pkmn/dex` formats.
+   */
+  showdownPin?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -215,18 +226,23 @@ function championsRoster(dex: PkmnDex, champData: ModData): PkmnSpecies[] {
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the @pkmn data source for a format. Async because the Champions mod is
- * dynamically imported (keeps @pkmn/mods out of the standard-mode path).
+ * Resolve the data source for a format. Async because the Champions path
+ * dynamically imports the vendored Showdown pin (keeps it out of gen-scope).
  */
 export async function loadFormat(format: Format): Promise<FormatSource> {
   let dex: PkmnDex;
   let roster: PkmnSpecies[];
   let genNumber: number;
+  let showdownPin: string | undefined;
 
   if (format === CHAMPIONS_FORMAT) {
-    const champData = (await import("@pkmn/mods/champions")) as unknown as ModData;
-    dex = Dex.mod("champions" as ID, champData);
-    roster = championsRoster(dex, champData);
+    const loaded = await loadChampionsShowdownMod();
+    showdownPin = loaded.pinSha;
+    // Unique mod id so a leftover npm `champions` cache cannot win, and so
+    // Dex.forGen paths stay on the gen9 singleton.
+    const modid = `champions-${SHOWDOWN_PIN.sha.slice(0, 12)}` as ID;
+    dex = Dex.mod(modid, loaded.modData);
+    roster = championsRoster(dex, loaded.modData);
     genNumber = 9; // Champions rides the Gen 9 dex.
   } else {
     const gen = genNumberForFormat(format); // 9 for "scarlet-violet"/"national-dex", else 1–8
@@ -268,10 +284,27 @@ export async function loadFormat(format: Format): Promise<FormatSource> {
     items,
     types,
     natures,
+    showdownPin,
     async getLearnset(speciesId: string): Promise<Record<string, string[]>> {
-      const ls = await dex.learnsets.get(speciesId);
-      const learnset = (ls as { learnset?: Record<string, string[]> } | null)?.learnset;
-      return learnset ?? {};
+      const own = await readLearnset(dex, speciesId);
+      if (Object.keys(own).length > 0) return own;
+      // Champions (and some mega keys on gen-scope) omit forme learnsets;
+      // inherit from the base species so ingest/UI never see a silent empty.
+      const sp = dex.species.get(speciesId);
+      if (sp?.baseSpecies && sp.baseSpecies !== sp.name) {
+        const base = dex.species.get(sp.baseSpecies);
+        if (base?.exists) return readLearnset(dex, base.id);
+      }
+      return own;
     },
   };
+}
+
+async function readLearnset(
+  dex: PkmnDex,
+  speciesId: string,
+): Promise<Record<string, string[]>> {
+  const ls = await dex.learnsets.get(speciesId);
+  const learnset = (ls as { learnset?: Record<string, string[]> } | null)?.learnset;
+  return learnset ?? {};
 }

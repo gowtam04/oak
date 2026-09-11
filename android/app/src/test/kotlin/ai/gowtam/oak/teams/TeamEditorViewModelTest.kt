@@ -111,6 +111,58 @@ class TeamEditorViewModelTest {
         assertEquals("keep-me", model.uiState.value.members[0].species)
     }
 
+    @Test
+    fun moveMemberInsertsAtDestinationAndPreservesIdentity() = runTest(mainDispatcherRule.dispatcher) {
+        val model = TeamEditorViewModel(FakeTeamService(), format = Format.Champions)
+        repeat(3) { model.addMember() }
+        model.updateMember(0) { it.copy(species = "a") }
+        model.updateMember(1) { it.copy(species = "b") }
+        model.updateMember(2) { it.copy(species = "c") }
+        model.updateMember(3) { it.copy(species = "d") }
+        val idA = model.uiState.value.members[0].id
+
+        model.moveMember(0, 3)
+
+        assertEquals(listOf("b", "c", "d", "a"), model.uiState.value.members.map { it.species })
+        assertEquals(idA, model.uiState.value.members[3].id)
+    }
+
+    @Test
+    fun moveMemberShiftsForwardTowardTheFront() = runTest(mainDispatcherRule.dispatcher) {
+        val model = TeamEditorViewModel(FakeTeamService(), format = Format.Champions)
+        repeat(3) { model.addMember() }
+        model.updateMember(0) { it.copy(species = "a") }
+        model.updateMember(1) { it.copy(species = "b") }
+        model.updateMember(2) { it.copy(species = "c") }
+        model.updateMember(3) { it.copy(species = "d") }
+        val idD = model.uiState.value.members[3].id
+
+        model.moveMember(3, 0)
+
+        assertEquals(listOf("d", "a", "b", "c"), model.uiState.value.members.map { it.species })
+        assertEquals(idD, model.uiState.value.members[0].id)
+    }
+
+    @Test
+    fun moveMemberNoopsWhenReadOnlyOrOutOfBounds() = runTest(mainDispatcherRule.dispatcher) {
+        val archived = TeamEditorViewModel(
+            FakeTeamService(),
+            team = fakeTeam(id = "t1").copy(
+                format = Format.ScarletViolet,
+                members = listOf(member("a"), member("b")),
+            ),
+        )
+        assertTrue(archived.isReadOnly)
+        archived.moveMember(0, 1)
+        assertEquals(listOf("a", "b"), archived.uiState.value.members.map { it.species })
+
+        val living = TeamEditorViewModel(FakeTeamService(), format = Format.Champions)
+        living.updateMember(0) { it.copy(species = "only") }
+        living.moveMember(0, 5)
+        living.moveMember(0, 0)
+        assertEquals(listOf("only"), living.uiState.value.members.map { it.species })
+    }
+
     // -------------------------------------------------------------------
     // Dex lookups: search / ability options / learnset-scoped moves
     // -------------------------------------------------------------------
@@ -427,5 +479,133 @@ class TeamEditorViewModelTest {
         assertEquals(2, service.analyzeCalls.size)
         assertEquals(resultNew, model.uiState.value.analysis)
         assertNull(model.uiState.value.analysisError)
+    }
+
+    // -------------------------------------------------------------------
+    // Autosave
+    // -------------------------------------------------------------------
+
+    @Test
+    fun autosaveDebounceCoalescesRapidEditsIntoOneCreate() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeTeamService()
+        val model = TeamEditorViewModel(service, format = Format.Champions)
+        model.saveDebounceMs = 50
+
+        model.updateMember(0) { it.copy(species = "a") }
+        model.updateMember(0) { it.copy(species = "b") }
+        model.updateMember(0) { it.copy(species = "garchomp") }
+        advanceTimeBy(49)
+        runCurrent()
+        assertEquals(0, service.createCalls.size)
+
+        advanceTimeBy(50)
+        runCurrent()
+        advanceUntilIdle()
+
+        assertEquals(1, service.createCalls.size)
+        assertEquals(0, service.updateCalls.size)
+        assertEquals("garchomp", service.createCalls[0].third?.first()?.species)
+        assertEquals("team-1", model.uiState.value.teamId)
+    }
+
+    @Test
+    fun autosaveCreateThenUpdate() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeTeamService()
+        val model = TeamEditorViewModel(service, format = Format.Champions)
+        model.saveDebounceMs = 0
+
+        model.updateMember(0) { it.copy(species = "garchomp") }
+        advanceUntilIdle()
+        assertEquals(1, service.createCalls.size)
+        assertEquals(0, service.updateCalls.size)
+
+        model.setName("Ladder Core")
+        advanceUntilIdle()
+        assertEquals(1, service.createCalls.size)
+        assertEquals(1, service.updateCalls.size)
+        assertEquals("Ladder Core", service.updateCalls[0].second)
+    }
+
+    @Test
+    fun autosaveDoesNotIssueASecondCreateWhileTheFirstIsInFlight() = runTest(mainDispatcherRule.dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        val service = FakeTeamService(createGate = gate)
+        val model = TeamEditorViewModel(service, format = Format.Champions)
+        model.saveDebounceMs = 0
+
+        model.updateMember(0) { it.copy(species = "a") }
+        runCurrent()
+        assertEquals(1, service.createCalls.size)
+
+        model.updateMember(0) { it.copy(species = "garchomp") }
+        runCurrent()
+        assertEquals(1, service.createCalls.size)
+        assertEquals(0, service.updateCalls.size)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(1, service.createCalls.size)
+        assertEquals(1, service.updateCalls.size)
+        assertEquals("garchomp", service.updateCalls[0].third?.first()?.species)
+    }
+
+    @Test
+    fun autosavePreservesMemberIdentity() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeTeamService()
+        val model = TeamEditorViewModel(service, format = Format.Champions)
+        model.saveDebounceMs = 0
+        val id = model.uiState.value.members[0].id
+
+        model.updateMember(0) { it.copy(species = "garchomp") }
+        advanceUntilIdle()
+
+        assertEquals(id, model.uiState.value.members[0].id)
+        assertEquals("garchomp", model.uiState.value.members[0].species)
+    }
+
+    @Test
+    fun flushSaveOfAnUnchangedNewTeamDoesNotCreate() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeTeamService()
+        val model = TeamEditorViewModel(service, format = Format.Champions)
+        model.flushSave()
+        advanceUntilIdle()
+        assertEquals(0, service.createCalls.size)
+        assertNull(model.uiState.value.teamId)
+    }
+
+    @Test
+    fun flushSaveOfAnUnchangedExistingTeamDoesNotUpdate() = runTest(mainDispatcherRule.dispatcher) {
+        val team = fakeTeam(id = "t1")
+        val service = FakeTeamService(teamResult = team to emptyList())
+        val model = TeamEditorViewModel(service, team = team)
+        model.flushSave()
+        advanceUntilIdle()
+        assertEquals(0, service.updateCalls.size)
+        assertEquals(0, service.createCalls.size)
+    }
+
+    @Test
+    fun flushSaveWritesWithoutWaitingForTheDebounce() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeTeamService()
+        val model = TeamEditorViewModel(service, format = Format.Champions)
+        model.saveDebounceMs = 30_000
+        model.updateMember(0) { it.copy(species = "garchomp") }
+        model.flushSave()
+        advanceUntilIdle()
+        assertEquals(1, service.createCalls.size)
+    }
+
+    @Test
+    fun exportFlushesADirtyNewTeamThenExports() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeTeamService(exportPasteResult = "Garchomp\n")
+        val model = TeamEditorViewModel(service, format = Format.Champions)
+        model.saveDebounceMs = 0
+        model.updateMember(0) { it.copy(species = "garchomp") }
+        model.exportPaste()
+        advanceUntilIdle()
+        assertEquals(1, service.createCalls.size)
+        assertEquals(listOf("team-1"), service.exportPasteCalls)
+        assertEquals("Garchomp\n", model.uiState.value.exportedPaste)
     }
 }

@@ -110,7 +110,8 @@ struct ChatThreadScreen: View {
         history: services.history,
         teams: services.teams,
         shares: services.shares,
-        voice: services.voice
+        voice: services.voice,
+        dexLookup: services.dexLookup
       )
 
     case .existing(let summary):
@@ -129,7 +130,8 @@ struct ChatThreadScreen: View {
           history: services.history,
           teams: services.teams,
           shares: services.shares,
-          voice: services.voice
+          voice: services.voice,
+          dexLookup: services.dexLookup
         )
         // Honor the conversation's `active_turn` (design §5.4): if a turn is still
         // generating for this thread, `loadResumed` records it and reattaches to its

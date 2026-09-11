@@ -28,8 +28,8 @@ export type GenFormat = "gen-5" | "gen-6" | "gen-7" | "gen-8" | "gen-4" | "gen-3
 /**
  * A data scope stored in the index.
  *   "scarlet-violet" — Gen 9 / Scarlet-Violet (standard mode; today's behavior).
- *   "champions"      — Pokémon Champions (current regulation), from the @pkmn
- *                      `champions` mod.
+ *   "champions"      — Pokémon Champions (current regulation), from the
+ *                      pinned Pokémon Showdown champions mod.
  *   "national-dex"   — the whole-Pokédex, form-aware reference scope (all
  *                      battle-relevant forms across every generation); rides
  *                      the Gen 9 dex like `scarlet-violet` (near-duplicate
@@ -82,13 +82,12 @@ export const CHAMPIONS_FORMAT: Format = "champions";
 export const NATDEX_FORMAT: Format = "national-dex";
 
 /**
- * The regulation the base `champions` @pkmn mod currently tracks (it always
- * tracks the LATEST regulation; bumping `@pkmn/mods` + re-ingesting advances it).
- * Surfaced to users via `generation_basis.note` in Champions answers and via
- * {@link currentRegulationMeta} (`GET /api/scope`). Update this one line when
- * the regulation rotates.
+ * Current Champions regulation shown on the chip and interpolated into prompts.
+ * This tracks the pinned Showdown SHA in `src/data/pkmn/showdown-pin.ts`, not
+ * npm `@pkmn/mods`. Flip it only after ingest gates pass on the new pin.
+ * Cutover: docs/features/champions-first/regulation-cutover.md
  */
-export const CHAMPIONS_REGULATION = "Regulation M-B";
+export const CHAMPIONS_REGULATION = "Regulation M-C";
 
 /**
  * Public product-facts payload for the current Champions regulation — the
@@ -102,7 +101,7 @@ export interface RegulationMeta {
   hint: string;
 }
 
-/** `"Regulation M-B"` → `"Champions · Reg M-B"` for the header pill. */
+/** `"Regulation M-C"` → `"Champions · Reg M-C"` for the header pill. */
 export function regulationChipLabel(
   regulation: string = CHAMPIONS_REGULATION,
 ): string {

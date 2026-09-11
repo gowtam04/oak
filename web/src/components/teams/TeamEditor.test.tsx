@@ -88,15 +88,23 @@ describe("TeamEditor", () => {
     expect(screen.getByTestId("member-1-species")).toHaveValue("Garchomp");
   });
 
-  it("renames and saves the draft", () => {
-    const { props } = setup();
-    fireEvent.change(screen.getByTestId("team-name"), {
-      target: { value: "Renamed" },
-    });
-    fireEvent.click(screen.getByTestId("team-save"));
-    expect(props.onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Renamed" }),
-    );
+  it("renames and autosaves the draft after a debounce", async () => {
+    vi.useFakeTimers();
+    try {
+      const { props } = setup();
+      fireEvent.change(screen.getByTestId("team-name"), {
+        target: { value: "Renamed" },
+      });
+      expect(props.onSave).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(600);
+      });
+      expect(props.onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "t1", name: "Renamed" }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("adds a blank member and focuses it", () => {
@@ -134,15 +142,55 @@ describe("TeamEditor", () => {
     expect(screen.getByTestId("member-1-species")).toHaveValue("Gyarados");
   });
 
-  it("saves even a partial team (BR-T4)", () => {
-    const { props } = setup({ team: detail({ members: [] }) });
-    fireEvent.click(screen.getByTestId("team-add-member"));
-    fireEvent.click(screen.getByTestId("team-save"));
-    expect(props.onSave).toHaveBeenCalledWith(
-      expect.objectContaining({
-        members: [expect.objectContaining({ species: null })],
+  it("reorders members from a roster-strip drop and keeps focus on the moved slot", () => {
+    setup({
+      team: detail({
+        members: [
+          fullMember("gyarados"),
+          fullMember("garchomp"),
+          fullMember("absol"),
+        ],
       }),
-    );
+    });
+    const transfer = {
+      data: "",
+      effectAllowed: "",
+      dropEffect: "",
+      setData(_type: string, value: string) {
+        this.data = value;
+      },
+      getData() {
+        return this.data;
+      },
+    };
+    fireEvent.dragStart(screen.getByTestId("roster-slot-0"), {
+      dataTransfer: transfer,
+    });
+    fireEvent.drop(screen.getByTestId("roster-slot-2"), {
+      dataTransfer: transfer,
+    });
+    // Gyarados moved to slot 2; the focused panel follows it.
+    expect(screen.getByTestId("member-2-species")).toHaveValue("Gyarados");
+    expect(screen.getByTestId("roster-slot-0")).toHaveTextContent("Garchomp");
+    expect(screen.getByTestId("roster-slot-1")).toHaveTextContent("Absol");
+  });
+
+  it("autosaves even a partial team (BR-T4)", async () => {
+    vi.useFakeTimers();
+    try {
+      const { props } = setup({ team: detail({ members: [] }) });
+      fireEvent.click(screen.getByTestId("team-add-member"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(600);
+      });
+      expect(props.onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          members: [expect.objectContaining({ species: null })],
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("renders team-level warnings and per-slot warnings separately", () => {
@@ -197,9 +245,10 @@ describe("TeamEditor", () => {
     expect(screen.getByTestId("member-0-stat-hp")).toBeInTheDocument();
   });
 
-  it("disables Save while saving", () => {
+  it("shows Saving status while a save is in flight", () => {
     setup({ saving: true });
-    expect(screen.getByTestId("team-save")).toBeDisabled();
+    expect(screen.getByTestId("team-save-status")).toHaveTextContent(/Saving/i);
+    expect(screen.queryByTestId("team-save")).not.toBeInTheDocument();
   });
 
   it("shows an INCOMPLETE legality pill for a partial team", () => {

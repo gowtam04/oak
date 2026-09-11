@@ -39,9 +39,6 @@ describe("operator-access-disclosure (privacy copy)", () => {
   it("discloses one persisted record per chat turn, including guests", () => {
     const text = renderedText();
     expect(text).toContain("One record per chat turn");
-    // prompt + answer are both stored
-    expect(text).toContain("your message text and Oak's answer");
-    // explicitly covers guests, not just signed-in users
     expect(text).toMatch(/whether you are signed in or using Oak as a guest/i);
   });
 
@@ -57,8 +54,18 @@ describe("operator-access-disclosure (privacy copy)", () => {
     expect(text).toMatch(/one-time sign-in code is requested, verified, or fails/i);
   });
 
-  it("discloses indefinite retention", () => {
-    expect(renderedText()).toMatch(/retained\s+indefinitely/i);
+  it("discloses the guest and signed-in full-content windows, then stats-only", () => {
+    const text = renderedText();
+    expect(text).toMatch(/about\s+14 days/i);
+    expect(text).toMatch(/about\s+90 days/i);
+    expect(text).toMatch(/usage stats/i);
+    expect(text).not.toMatch(/retained\s+indefinitely/i);
+  });
+
+  it("discloses that signed-in chat history is unchanged by operational prune", () => {
+    const text = renderedText();
+    expect(text).toMatch(/signed-in chat history is separate/i);
+    expect(text).toMatch(/until you delete the account/i);
   });
 
   it("discloses that the single operator can read account and guest conversations", () => {

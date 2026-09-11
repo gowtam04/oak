@@ -21,7 +21,7 @@ export const metadata: Metadata = {
  */
 const PRIVACY_POLICY_MARKDOWN = `# Privacy Policy
 
-**Last updated: September 7, 2026**
+**Last updated: September 9, 2026**
 
 Oak ("Oak," "we," "us") is an independent, unofficial fan project — a chat
 companion for reasoning about competitive Pokémon Champions teams. It is not

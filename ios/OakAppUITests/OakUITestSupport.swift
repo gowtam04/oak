@@ -128,6 +128,17 @@ enum OakUITest {
     static let title = "No Connection"
     static let tryAgain = "Try Again"
   }
+
+  /// Teams library (`TeamsListView`). Guest gate vs signed-in create controls.
+  enum Teams {
+    static let guestTitle = "Sign in to build teams"
+    static let addTeam = "Add team"
+    static let addTeamIdentifier = "oak-add-team"
+    static let newTeam = "New team"
+    static let newTeamIdentifier = "oak-new-team"
+    static let importShowdown = "Import from Showdown"
+    static let importShowdownIdentifier = "oak-import-showdown"
+  }
 }
 
 // MARK: - Launch

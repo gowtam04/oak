@@ -17,10 +17,9 @@
     "plugins": [{ "name": "next" }],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@pkmn/mods/*": ["./node_modules/@pkmn/mods/build/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", ".next", "out", "dist", "build", "data"]
+  "exclude": ["node_modules", ".next", "out", "dist", "build", "data", "vendor"]
 }

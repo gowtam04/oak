@@ -189,6 +189,61 @@ struct TeamEditorViewModelTests {
     #expect(vm.members[0].species == "second")
   }
 
+  @Test
+  func moveMemberInsertsAtDestinationAndPreservesIdentity() {
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), format: .champions)
+    vm.addMember()
+    vm.addMember()
+    vm.addMember()
+    vm.members[0].species = "a"
+    vm.members[1].species = "b"
+    vm.members[2].species = "c"
+    vm.members[3].species = "d"
+    let idA = vm.members[0].id
+
+    vm.moveMember(from: 0, to: 3)
+
+    #expect(vm.members.map(\.species) == ["b", "c", "d", "a"])
+    #expect(vm.members[3].id == idA)
+  }
+
+  @Test
+  func moveMemberShiftsForwardTowardTheFront() {
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), format: .champions)
+    vm.addMember()
+    vm.addMember()
+    vm.addMember()
+    vm.members[0].species = "a"
+    vm.members[1].species = "b"
+    vm.members[2].species = "c"
+    vm.members[3].species = "d"
+    let idD = vm.members[3].id
+
+    vm.moveMember(from: 3, to: 0)
+
+    #expect(vm.members.map(\.species) == ["d", "a", "b", "c"])
+    #expect(vm.members[0].id == idD)
+  }
+
+  @Test
+  func moveMemberNoopsWhenReadOnlyOrOutOfBounds() {
+    let existing = team(
+      id: "t1",
+      format: .scarletViolet,
+      members: [member(species: "a"), member(species: "b")]
+    )
+    let archived = TeamEditorViewModel(teamService: FakeTeamService(), team: existing)
+    #expect(archived.isReadOnly)
+    archived.moveMember(from: 0, to: 1)
+    #expect(archived.members.map(\.species) == ["a", "b"])
+
+    let living = TeamEditorViewModel(teamService: FakeTeamService(), format: .champions)
+    living.members[0].species = "only"
+    living.moveMember(from: 0, to: 5)
+    living.moveMember(from: 0, to: 0)
+    #expect(living.members.map(\.species) == ["only"])
+  }
+
   // MARK: Editable ↔ wire conversion
 
   @Test
@@ -398,5 +453,141 @@ struct TeamEditorViewModelTests {
     #expect(vm.isReadOnly)
     #expect(vm.format == .gen7)
     #expect(vm.canSave == false)
+  }
+
+  // MARK: Autosave
+
+  @Test
+  func autosaveDebounceCoalescesRapidEditsIntoOneCreate() async {
+    let fake = FakeTeamService()
+    let vm = TeamEditorViewModel(teamService: fake, format: .champions)
+    vm.saveDebounce = .milliseconds(50)
+
+    vm.members[0].species = "a"
+    vm.scheduleSave()
+    vm.members[0].species = "b"
+    vm.scheduleSave()
+    vm.members[0].species = "garchomp"
+    vm.scheduleSave()
+    await vm.awaitSave()
+
+    #expect(fake.createCount == 1)
+    #expect(fake.updateCount == 0)
+    #expect(fake.lastCreateMembers?.first?.species == "garchomp")
+    #expect(vm.teamId != nil)
+  }
+
+  @Test
+  func autosaveCreateThenUpdate() async {
+    let fake = FakeTeamService()
+    let vm = TeamEditorViewModel(teamService: fake, format: .champions, name: "Core")
+    vm.members[0].species = "garchomp"
+    await vm.flushSave()
+
+    #expect(fake.createCount == 1)
+    #expect(fake.updateCount == 0)
+
+    vm.name = "Ladder Core"
+    await vm.flushSave()
+
+    #expect(fake.createCount == 1)
+    #expect(fake.updateCount == 1)
+    #expect(fake.lastUpdateName == "Ladder Core")
+  }
+
+  @Test
+  func autosaveDoesNotIssueASecondCreateWhileTheFirstIsInFlight() async {
+    let fake = FakeTeamService()
+    fake.holdsCreate = true
+    let vm = TeamEditorViewModel(teamService: fake, format: .champions)
+    vm.saveDebounce = .zero
+
+    vm.members[0].species = "a"
+    vm.scheduleSave()
+    await settle(until: { fake.createCount == 1 && fake.pendingCreateCount == 1 })
+
+    vm.members[0].species = "garchomp"
+    vm.scheduleSave()
+    #expect(fake.createCount == 1)
+    #expect(fake.updateCount == 0)
+
+    fake.releaseCreate()
+    await vm.awaitSave()
+
+    #expect(fake.createCount == 1)
+    #expect(fake.updateCount == 1)
+    #expect(fake.lastUpdateMembers?.first?.species == "garchomp")
+  }
+
+  @Test
+  func autosavePreservesMemberIdentity() async {
+    let fake = FakeTeamService()
+    let vm = TeamEditorViewModel(teamService: fake, format: .champions)
+    let id = vm.members[0].id
+    vm.members[0].species = "garchomp"
+    await vm.flushSave()
+
+    #expect(vm.members[0].id == id)
+    #expect(vm.members[0].species == "garchomp")
+  }
+
+  @Test
+  func flushSaveOfAnUnchangedNewTeamDoesNotCreate() async {
+    let fake = FakeTeamService()
+    let vm = TeamEditorViewModel(teamService: fake, format: .champions)
+    await vm.flushSave()
+
+    #expect(fake.createCount == 0)
+    #expect(vm.teamId == nil)
+  }
+
+  @Test
+  func flushSaveOfAnUnchangedExistingTeamDoesNotUpdate() async {
+    let existing = team(id: "t1", name: "Old", members: [member(species: "garchomp")])
+    let fake = FakeTeamService(seed: [existing])
+    let vm = TeamEditorViewModel(teamService: fake, team: existing)
+    await vm.flushSave()
+
+    #expect(fake.updateCount == 0)
+    #expect(fake.createCount == 0)
+  }
+
+  @Test
+  func archivedEditorNeverAutosaves() async {
+    let archived = team(id: "g7", format: .gen7, members: [member(species: "tapu-koko")])
+    let fake = FakeTeamService(seed: [archived])
+    let vm = TeamEditorViewModel(teamService: fake, team: archived)
+    vm.members[0].species = "pikachu"
+    vm.scheduleSave()
+    await vm.flushSave()
+
+    #expect(fake.createCount == 0)
+    #expect(fake.updateCount == 0)
+  }
+
+  @Test
+  func flushSaveWritesWithoutWaitingForTheDebounce() async {
+    let fake = FakeTeamService()
+    let vm = TeamEditorViewModel(teamService: fake, format: .champions)
+    vm.saveDebounce = .seconds(30)
+    vm.members[0].species = "garchomp"
+    vm.scheduleSave()
+    await vm.flushSave()
+
+    #expect(fake.createCount == 1)
+  }
+
+  @Test
+  func exportFlushesADirtyNewTeamThenExports() async {
+    let fake = FakeTeamService()
+    let vm = TeamEditorViewModel(teamService: fake, format: .champions)
+    vm.members[0].species = "garchomp"
+
+    let paste = await vm.exportPaste()
+
+    #expect(paste != nil)
+    #expect(fake.createCount == 1)
+    #expect(fake.exportCount == 1)
+    #expect(fake.lastExportId == vm.teamId)
   }
 }

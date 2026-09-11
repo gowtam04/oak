@@ -17,6 +17,7 @@ import {
   type PkmnDex,
   type PkmnSpecies,
 } from "@/data/pkmn/gen-provider";
+import { SHOWDOWN_PIN } from "@/data/pkmn/showdown-pin";
 import type {
   MoveDetail,
   AbilityDetail,
@@ -45,7 +46,7 @@ export interface ReferenceRow {
 }
 
 /** Citation source label (replaces the old PokeAPI URL; field is optional). */
-export const SOURCE_LABEL = "@pkmn/dex (Pokémon Showdown)";
+export const SOURCE_LABEL = `Pokémon Showdown ${SHOWDOWN_PIN.sha.slice(0, 12)} (@pkmn/dex overlay)`;
 
 // ---------------------------------------------------------------------------
 // Normalizers (exported for unit tests)
