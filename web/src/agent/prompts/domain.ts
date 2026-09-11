@@ -367,6 +367,7 @@ ends in the submit_answer call that produces the user-facing answer card.
 User: does Fake Out work on Farigiraf?
 → get_move({ name: "fake-out" })
 ← { found: true, display_name: "Fake Out", priority: 3, damage_class: "physical",
+    flags: ["contact","metronome","mirror","protect"],
     effect_short: "Hits first (+3 priority), flinches; only on the user's first turn." }
 → get_pokemon({ name: "farigiraf" })
 ← { found: true, display_name: "Farigiraf", types: ["normal","psychic"],

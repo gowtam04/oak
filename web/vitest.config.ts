@@ -28,6 +28,8 @@ export default defineConfig({
           include: [
             "src/data/pkmn/**/*.test.ts",
             "src/data/formats.test.ts",
+            // Pure normalize/flag/effect-text units — no Postgres.
+            "src/ingest/build-reference.test.ts",
           ],
         },
       },
@@ -49,6 +51,7 @@ export default defineConfig({
             // Offline pin/loader gates — `pkmn` project (no Postgres).
             "src/data/pkmn/**/*.test.ts",
             "src/data/formats.test.ts",
+            "src/ingest/build-reference.test.ts",
             "node_modules/**",
           ],
           // One shared Postgres container AND one shared Redis container for the

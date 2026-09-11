@@ -145,6 +145,44 @@ struct WireToleranceTests {
     #expect(EntityKind.move.rawValue == "move")
   }
 
+  /// Additive `flags` on a move artifact: missing key is nil, present list decodes.
+  @Test
+  func moveFlagsDecodeWhenPresentAndStayNilWhenAbsent() throws {
+    let withFlags = """
+      {"status":"ok","kind":"move","format":"champions",\
+      "resolved":{"slug":"aura-sphere","display_name":"Aura Sphere"},\
+      "generation":"Champions","is_fallback":false,"citations":[],\
+      "data":{"display_name":"Aura Sphere","type":"fighting",\
+      "damage_class":"special","power":80,"accuracy":null,"pp":20,\
+      "priority":0,"target":"any","effect_short":"Never misses.",\
+      "effect_full":"Never misses.","flags":["bullet","pulse"]}}
+      """
+    guard case let .ok(ok) = try decodeArtifact(withFlags),
+      case let .move(data) = ok.data
+    else {
+      Issue.record("expected an ok move artifact")
+      return
+    }
+    #expect(data.flags == ["bullet", "pulse"])
+
+    let withoutFlags = """
+      {"status":"ok","kind":"move","format":"champions",\
+      "resolved":{"slug":"fake-out","display_name":"Fake Out"},\
+      "generation":"Champions","is_fallback":false,"citations":[],\
+      "data":{"display_name":"Fake Out","type":"normal",\
+      "damage_class":"physical","power":40,"accuracy":100,"pp":10,\
+      "priority":3,"target":"normal","effect_short":"Flinch.",\
+      "effect_full":"Flinch."}}
+      """
+    guard case let .ok(ok2) = try decodeArtifact(withoutFlags),
+      case let .move(data2) = ok2.data
+    else {
+      Issue.record("expected an ok move artifact without flags")
+      return
+    }
+    #expect(data2.flags == nil)
+  }
+
   // MARK: EntityArtifactOk.source_format (National-Dex fallback marker, #2)
 
   /// A minimal `ok` type envelope, optionally carrying the additive `source_format` marker.

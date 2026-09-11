@@ -136,6 +136,16 @@ describe("MoveArtifact", () => {
       "hits all adjacent",
     );
     expect(screen.getByTestId("type-badge-ground")).toBeInTheDocument();
+    expect(screen.getByTestId("move-stats")).not.toHaveTextContent("Flags");
+  });
+
+  it("renders Showdown flags when present", () => {
+    render(
+      <MoveArtifact
+        data={{ ...MOVE_ARTIFACT.data, flags: ["bullet", "pulse"] }}
+      />,
+    );
+    expect(screen.getByTestId("move-stats")).toHaveTextContent("bullet, pulse");
   });
 });
 

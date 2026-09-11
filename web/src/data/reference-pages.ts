@@ -329,6 +329,7 @@ export async function loadMovePageUncached(
     target: data.target,
     effectShort: data.effect_short,
     effectFull: data.effect_full,
+    flags: data.flags,
     learners,
     learnerCount: learners.length,
     availability: [CHAMPIONS_FORMAT],

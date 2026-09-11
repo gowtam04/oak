@@ -289,6 +289,8 @@ data class MoveArtifactData(
     @SerialName("spread_modifier_doubles") val spreadModifierDoubles: Double? = null,
     @SerialName("effect_short") val effectShort: String,
     @SerialName("effect_full") val effectFull: String,
+    /** Showdown move flags (`bullet`, `pulse`, `sound`, …). Empty on older payloads. */
+    val flags: List<String> = emptyList(),
     @SerialName("gen9_learner_count") val gen9LearnerCount: Int? = null,
 )
 

@@ -211,6 +211,13 @@ describe("The one body — Champions-only coach (CF-CHAT-US-2, CF-INT-BR-1)", ()
       expect(text).not.toContain("web_search");
     });
 
+    it(`teaches get_move flags for immunity interactions (${provider})`, () => {
+      const text = bodyText(provider);
+      expect(text).toContain("get_move");
+      expect(text).toContain("flags");
+      expect(text).toContain("bullet");
+    });
+
     it(`does not embed warehouse DDL or wiki routing (${provider})`, () => {
       const prefix = buildSystemSegments({ provider, mode: "champions" })
         .slice(0, -1)

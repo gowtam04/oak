@@ -110,6 +110,9 @@ export default async function MoveDetailPage({
     { label: "PP", value: data.pp == null ? "—" : String(data.pp) },
     { label: "Priority", value: String(data.priority) },
     { label: "Target", value: titleCase(data.target) },
+    ...(data.flags && data.flags.length > 0
+      ? [{ label: "Flags", value: data.flags.join(", ") }]
+      : []),
   ];
   const effect = data.effectFull || data.effectShort;
 

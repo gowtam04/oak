@@ -410,6 +410,9 @@ private fun MoveBody(
         InfoRow("PP", data.pp?.toString() ?: "—")
         InfoRow("Priority", signed(data.priority))
         InfoRow("Target", titleizeNonNull(data.target))
+        if (data.flags.isNotEmpty()) {
+            InfoRow("Flags", data.flags.joinToString(", "))
+        }
         data.gen9LearnerCount?.let { InfoRow("Gen 9 learners", it.toString()) }
     }
     EffectSection(data.effectShort, data.effectFull)

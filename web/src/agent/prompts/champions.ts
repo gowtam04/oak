@@ -65,6 +65,11 @@ carefully; they are the roster/stat system, not the engine):
   toolNotes: `- For any stat or damage math, pass the **Stat Points** value in
   compute_stat's \`ev\` field; its \`iv\`/\`level\` fields are ignored (IVs are 31,
   everything is Level 50).
+- \`get_move\` includes \`flags\` (Showdown tags: bullet, pulse, sound, contact,
+  punch, powder, …). Use that list for immunity/interaction questions
+  (Bulletproof, Soundproof, Overcoat). Do not infer those tags from the move
+  name. Aura Sphere's effect text does not say it is a bullet move — the
+  \`bullet\` flag does.
 - For CURRENT competitive usage — "what is X running right now", the most common
   moves/items/abilities/nature/spread/teammates, or whether something is "meta" —
   call get_usage_stats({ name, format }). It returns LIVE usage from

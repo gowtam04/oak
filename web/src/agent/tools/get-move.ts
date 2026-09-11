@@ -23,10 +23,13 @@ import type { OakDb } from "@/data/db";
 
 const description =
   "Get a move's mechanical details — type, power, accuracy, PP, priority, " +
-  "damage class (physical/special/status), target, and effect text. Use " +
-  "whenever reasoning depends on how a move behaves (e.g. checking that Fake " +
-  "Out is a priority move). Optionally returns the count of Pokémon that learn " +
-  "it in the current Champions roster.";
+  "damage class (physical/special/status), target, effect text, and `flags` " +
+  "(Showdown tags such as bullet, pulse, sound, contact, punch, powder). Use " +
+  "flags for immunity/interaction questions (Bulletproof vs bullet, Soundproof " +
+  "vs sound) instead of inferring from the move name. Use whenever reasoning " +
+  "depends on how a move behaves (e.g. checking that Fake Out is a priority " +
+  "move). Optionally returns the count of Pokémon that learn it in the current " +
+  "Champions roster.";
 
 /** True when a reference result is a successful detail record (found: true). */
 function isFound(ref: unknown): ref is { found: true } {

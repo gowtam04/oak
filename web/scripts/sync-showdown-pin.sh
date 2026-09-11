@@ -20,6 +20,9 @@ FILES=(
   data/abilities.ts
   data/items.ts
   data/moves.ts
+  data/text/abilities.ts
+  data/text/moves.ts
+  data/text/items.ts
   data/mods/champions/abilities.ts
   data/mods/champions/conditions.ts
   data/mods/champions/formats-data.ts

@@ -275,6 +275,8 @@ struct MoveArtifactData: Decodable, Sendable {
   let spreadModifierDoubles: Double?
   let effectShort: String
   let effectFull: String
+  /// Showdown move flags (`bullet`, `pulse`, `sound`, …). Absent on older payloads.
+  let flags: [String]?
   /// `z.number().int().optional()` — only when the caller requested it.
   let gen9LearnerCount: Int?
 
@@ -291,6 +293,7 @@ struct MoveArtifactData: Decodable, Sendable {
     case spreadModifierDoubles = "spread_modifier_doubles"
     case effectShort = "effect_short"
     case effectFull = "effect_full"
+    case flags
     case gen9LearnerCount = "gen9_learner_count"
   }
 }

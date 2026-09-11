@@ -53,9 +53,14 @@ A new current regulation is ready to pin when all of these are true:
 4. **Species bytes exist** for those ids: `data/pokedex.ts`, `data/abilities.ts`,
    `data/items.ts`, and Champions learnsets (`data/mods/champions/learnsets.ts`)
    for new formes.
+5. **Effect prose exists** for indexed moves/abilities/items:
+   `data/text/abilities.ts`, `data/text/moves.ts`, `data/text/items.ts`.
+   Mechanics files have no `shortDesc`/`desc`. Pin tests fail if any indexed
+   entity would ingest empty effect text.
 
 If FormatsData unbans an id but pokedex/ability/item/learnset bytes are missing,
-that is a **half-mod**. Do not pin it.
+that is a **half-mod**. Do not pin it. Same if the text tables are omitted —
+Oak cannot answer mechanics questions without effect text.
 
 Prefer a SHA **after same-day hotfixes** (ability swaps, tier tags). The pin
 date is the commit time, not the announcement day.

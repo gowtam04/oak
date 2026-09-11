@@ -294,6 +294,12 @@ export const moveDetailSchema = z.object({
   spread_modifier_doubles: z.number().nullable().optional(),
   effect_short: z.string(),
   effect_full: z.string(),
+  /**
+   * Showdown move flags whose value is truthy, sorted (e.g. "bullet", "pulse",
+   * "sound", "contact"). Optional so stored/fixture payloads without it still
+   * parse; ingest always emits the key.
+   */
+  flags: z.array(z.string()).optional(),
   gen9_learner_count: z.number().int().optional(),
 });
 

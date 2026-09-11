@@ -35,6 +35,9 @@ interface ShowdownDataModule {
   Learnsets?: Table;
   FormatsData?: Table;
   Conditions?: Table;
+  AbilitiesText?: Table;
+  MovesText?: Table;
+  ItemsText?: Table;
 }
 
 function vendorFile(rel: string): string {
@@ -77,6 +80,60 @@ export function applyInherit(base: Table, overlay: Table): Table {
   return out;
 }
 
+/** Pull current-gen prose off a Showdown text entry (ignore nested `genN`). */
+function proseFrom(entry: unknown): { shortDesc: string; desc: string } | null {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+  const t = entry as { shortDesc?: unknown; desc?: unknown };
+  const shortDesc = typeof t.shortDesc === "string" ? t.shortDesc : "";
+  const desc =
+    typeof t.desc === "string" && t.desc.length > 0 ? t.desc : shortDesc;
+  if (!shortDesc && !desc) return null;
+  return { shortDesc, desc };
+}
+
+/**
+ * Typed Hidden Power clones (`hiddenpowerbug`, …) ship name-only text rows.
+ * Inherit the base `hiddenpower` prose.
+ */
+function parentTextId(id: string): string | null {
+  if (/^hiddenpower[a-z]+$/.test(id)) return "hiddenpower";
+  return null;
+}
+
+/**
+ * Showdown `data/text` has no row for a few Champions-indexed moves. Keep this
+ * map tiny and mechanics-derived — do not invent franchise lore.
+ */
+const TEXT_FALLBACKS: Readonly<Record<string, { shortDesc: string; desc: string }>> =
+  {
+    nihillight: {
+      shortDesc:
+        "Hits both foes. Ignores evasiveness and defensive stat stages; hits Dragon types even if they would be immune.",
+      desc: "Hits both adjacent foes. Ignores the target's evasiveness and Defense/Sp. Def stat stages, and can hit Dragon types even if they would otherwise be immune.",
+    },
+  };
+
+/**
+ * Copy current-gen `shortDesc` / `desc` from a Showdown text table onto a
+ * mechanics table. Nested `genN` blocks are historical and ignored. Missing
+ * text ids stay empty unless a parent id or {@link TEXT_FALLBACKS} fills them
+ * (ingest then fails loud on anything still empty).
+ */
+export function applyText(mechanics: Table, text: Table): Table {
+  const out: Table = { ...mechanics };
+  for (const [id, raw] of Object.entries(out)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const fromSelf = proseFrom(text[id]);
+    const fromParent = parentTextId(id)
+      ? proseFrom(text[parentTextId(id)!])
+      : null;
+    const prose = fromSelf ?? fromParent ?? TEXT_FALLBACKS[id] ?? null;
+    if (!prose) continue;
+    out[id] = { ...(raw as Table), ...prose };
+  }
+  return out;
+}
+
 export interface ChampionsShowdownMod {
   pinSha: string;
   modData: ModData;
@@ -95,19 +152,35 @@ export async function loadChampionsShowdownMod(): Promise<ChampionsShowdownMod> 
     );
   }
 
-  const [pokedex, abilities, items, moves, champAbilities, champConditions, champFormats, champItems, champLearnsets, champMoves] =
-    await Promise.all([
-      importVendorTable("data/pokedex.ts"),
-      importVendorTable("data/abilities.ts"),
-      importVendorTable("data/items.ts"),
-      importVendorTable("data/moves.ts"),
-      importVendorTable("data/mods/champions/abilities.ts"),
-      importVendorTable("data/mods/champions/conditions.ts"),
-      importVendorTable("data/mods/champions/formats-data.ts"),
-      importVendorTable("data/mods/champions/items.ts"),
-      importVendorTable("data/mods/champions/learnsets.ts"),
-      importVendorTable("data/mods/champions/moves.ts"),
-    ]);
+  const [
+    pokedex,
+    abilities,
+    items,
+    moves,
+    abilitiesText,
+    movesText,
+    itemsText,
+    champAbilities,
+    champConditions,
+    champFormats,
+    champItems,
+    champLearnsets,
+    champMoves,
+  ] = await Promise.all([
+    importVendorTable("data/pokedex.ts"),
+    importVendorTable("data/abilities.ts"),
+    importVendorTable("data/items.ts"),
+    importVendorTable("data/moves.ts"),
+    importVendorTable("data/text/abilities.ts"),
+    importVendorTable("data/text/moves.ts"),
+    importVendorTable("data/text/items.ts"),
+    importVendorTable("data/mods/champions/abilities.ts"),
+    importVendorTable("data/mods/champions/conditions.ts"),
+    importVendorTable("data/mods/champions/formats-data.ts"),
+    importVendorTable("data/mods/champions/items.ts"),
+    importVendorTable("data/mods/champions/learnsets.ts"),
+    importVendorTable("data/mods/champions/moves.ts"),
+  ]);
 
   const species = pokedex.Pokedex;
   const formatsData = champFormats.FormatsData;
@@ -123,12 +196,30 @@ export async function loadChampionsShowdownMod(): Promise<ChampionsShowdownMod> 
   if (!champAbilities.Abilities || !champItems.Items || !champMoves.Moves) {
     throw new Error("Showdown champions mod missing Abilities/Items/Moves");
   }
+  if (
+    !abilitiesText.AbilitiesText ||
+    !movesText.MovesText ||
+    !itemsText.ItemsText
+  ) {
+    throw new Error(
+      "Showdown vendor text tables missing AbilitiesText/MovesText/ItemsText",
+    );
+  }
 
   const modData = {
     Species: species,
-    Abilities: applyInherit(abilities.Abilities, champAbilities.Abilities),
-    Items: applyInherit(items.Items, champItems.Items),
-    Moves: applyInherit(moves.Moves, champMoves.Moves),
+    Abilities: applyText(
+      applyInherit(abilities.Abilities, champAbilities.Abilities),
+      abilitiesText.AbilitiesText,
+    ),
+    Items: applyText(
+      applyInherit(items.Items, champItems.Items),
+      itemsText.ItemsText,
+    ),
+    Moves: applyText(
+      applyInherit(moves.Moves, champMoves.Moves),
+      movesText.MovesText,
+    ),
     Learnsets: learnsets,
     FormatsData: formatsData,
     Conditions: champConditions.Conditions ?? {},

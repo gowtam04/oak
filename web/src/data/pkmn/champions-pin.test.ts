@@ -15,6 +15,7 @@ import { loadFormat, type FormatSource } from "./gen-provider";
 import { SHOWDOWN_PIN } from "./showdown-pin";
 import {
   applyInherit,
+  applyText,
   loadChampionsShowdownMod,
   SHOWDOWN_VENDOR_DIR,
 } from "./showdown-loader";
@@ -67,6 +68,73 @@ describe("applyInherit", () => {
     });
     expect(out.lucarionitez).not.toHaveProperty("onTakeItem");
     expect(out.lucarionitez).not.toHaveProperty("inherit");
+  });
+});
+
+describe("applyText", () => {
+  it("copies current-gen shortDesc/desc onto matching mechanics ids", () => {
+    const mechanics = {
+      bulletproof: { name: "Bulletproof", flags: { breakable: 1 } },
+      aurasphere: { name: "Aura Sphere", basePower: 80 },
+    };
+    const text = {
+      bulletproof: {
+        name: "Bulletproof",
+        shortDesc: "This Pokemon is immune to bullet moves.",
+        gen6: { shortDesc: "old" },
+      },
+      aurasphere: {
+        name: "Aura Sphere",
+        desc: "Does not check accuracy.",
+        shortDesc: "This move does not check accuracy.",
+      },
+    };
+    const out = applyText(mechanics, text);
+    expect(out.bulletproof).toMatchObject({
+      name: "Bulletproof",
+      flags: { breakable: 1 },
+      shortDesc: "This Pokemon is immune to bullet moves.",
+      desc: "This Pokemon is immune to bullet moves.",
+    });
+    expect(out.aurasphere).toMatchObject({
+      name: "Aura Sphere",
+      basePower: 80,
+      shortDesc: "This move does not check accuracy.",
+      desc: "Does not check accuracy.",
+    });
+  });
+
+  it("leaves unmatched mechanics ids unchanged so ingest can fail loud", () => {
+    const out = applyText(
+      { mystery: { name: "Mystery" } },
+      { bulletproof: { shortDesc: "immune to bullet moves." } },
+    );
+    expect(out.mystery).toEqual({ name: "Mystery" });
+    expect(out.mystery).not.toHaveProperty("shortDesc");
+  });
+
+  it("inherits Hidden Power clone prose from the base move", () => {
+    const out = applyText(
+      { hiddenpowerbug: { name: "Hidden Power Bug" } },
+      {
+        hiddenpower: {
+          shortDesc: "Varies in type based on the user's IVs.",
+          desc: "Type depends on IVs.",
+        },
+        hiddenpowerbug: { name: "Hidden Power Bug" },
+      },
+    );
+    expect(out.hiddenpowerbug).toMatchObject({
+      name: "Hidden Power Bug",
+      shortDesc: "Varies in type based on the user's IVs.",
+      desc: "Type depends on IVs.",
+    });
+  });
+
+  it("fills Nihil Light from the mechanics-derived fallback", () => {
+    const out = applyText({ nihillight: { name: "Nihil Light" } }, {});
+    expect(out.nihillight).toMatchObject({ name: "Nihil Light" });
+    expect((out.nihillight as { shortDesc: string }).shortDesc).toMatch(/Dragon/i);
   });
 });
 
@@ -154,6 +222,40 @@ describe("Champions Showdown pin", () => {
 
   it("applies the Champions Anchor Shot override (90, not 80)", () => {
     expect(champions.dex.moves.get("anchorshot").basePower).toBe(90);
+  });
+
+  it("merges Showdown text so Bulletproof / Aura Sphere / Leftovers have prose", () => {
+    const bulletproof = champions.dex.abilities.get("bulletproof");
+    expect(bulletproof.shortDesc).toMatch(/bullet/i);
+    const armorTail = champions.dex.abilities.get("armortail");
+    expect(armorTail.shortDesc || armorTail.desc).toBeTruthy();
+    const leftovers = champions.dex.items.get("leftovers");
+    expect(leftovers.shortDesc).toMatch(/HP/i);
+    const auraSphere = champions.dex.moves.get("aurasphere");
+    expect(auraSphere.shortDesc).toBeTruthy();
+    expect(auraSphere.flags.bullet).toBeTruthy();
+    expect(auraSphere.flags.pulse).toBeTruthy();
+    expect(champions.dex.moves.get("hiddenpowerbug").shortDesc).toBeTruthy();
+    expect(champions.dex.moves.get("nihillight").shortDesc).toMatch(/Dragon/i);
+  });
+
+  it("indexes non-empty effect text for every ability, move, and item", () => {
+    const missing = (id: string, shortDesc?: string, desc?: string): string | null =>
+      shortDesc || desc ? null : id;
+    const badAbilities = champions.abilities
+      .map((a) => missing(a.id, a.shortDesc, a.desc))
+      .filter((id): id is string => id !== null);
+    const badMoves = champions.moves
+      .map((m) => missing(m.id, m.shortDesc, m.desc))
+      .filter((id): id is string => id !== null);
+    const badItems = champions.items
+      .map((i) => missing(i.id, i.shortDesc, i.desc))
+      .filter((id): id is string => id !== null);
+    expect(badAbilities, `abilities missing text: ${badAbilities.join(",")}`).toEqual(
+      [],
+    );
+    expect(badMoves, `moves missing text: ${badMoves.join(",")}`).toEqual([]);
+    expect(badItems, `items missing text: ${badItems.join(",")}`).toEqual([]);
   });
 
   it("keeps Mega Salamence legal despite tier Uber", () => {

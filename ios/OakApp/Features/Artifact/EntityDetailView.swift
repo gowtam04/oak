@@ -373,6 +373,9 @@ struct EntityDetailView: View {
         infoRow(label: "PP", value: data.pp.map(String.init) ?? "—")
         infoRow(label: "Priority", value: Self.signed(data.priority))
         infoRow(label: "Target", value: Self.titleize(data.target))
+        if let flags = data.flags, !flags.isEmpty {
+          infoRow(label: "Flags", value: flags.joined(separator: ", "))
+        }
         if let learners = data.gen9LearnerCount {
           infoRow(label: "Gen 9 learners", value: String(learners))
         }

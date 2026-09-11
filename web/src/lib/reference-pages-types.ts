@@ -224,6 +224,8 @@ export interface MovePageData {
   target: string;
   effectShort: string;
   effectFull: string;
+  /** Showdown move flags (bullet, pulse, sound, …); empty when unknown. */
+  flags?: string[];
   /** The reverse roster — every Pokémon that can learn this move. */
   learners: LearnerRow[];
   /** Convenience count of `learners` (the spine's headline number). */

@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { normalizeMove } from "./build-reference";
+import { assertEffectText, moveFlagNames, normalizeMove } from "./build-reference";
 
 type MoveInput = Parameters<typeof normalizeMove>[0];
 
@@ -66,5 +66,61 @@ describe("normalizeMove — spread fields", () => {
     );
     expect(m.spread_modifier_doubles).toBe(0.5);
     expect(m.hits_allies).toBe(true);
+  });
+});
+
+describe("normalizeMove — flags", () => {
+  it("emits sorted truthy Showdown flag names (Aura Sphere)", () => {
+    const m = normalizeMove(
+      move({
+        name: "Aura Sphere",
+        type: "Fighting",
+        category: "Special",
+        basePower: 80,
+        accuracy: true,
+        flags: {
+          protect: 1,
+          mirror: 1,
+          distance: 1,
+          metronome: 1,
+          bullet: 1,
+          pulse: 1,
+        },
+      }),
+    );
+    expect(m.flags).toEqual([
+      "bullet",
+      "distance",
+      "metronome",
+      "mirror",
+      "protect",
+      "pulse",
+    ]);
+  });
+
+  it("drops falsy flag values and returns [] when flags are missing", () => {
+    expect(moveFlagNames({ contact: 1, punch: 0, sound: undefined })).toEqual([
+      "contact",
+    ]);
+    expect(moveFlagNames(undefined)).toEqual([]);
+    expect(moveFlagNames(null)).toEqual([]);
+    expect(normalizeMove(move({})).flags).toEqual([]);
+  });
+});
+
+describe("assertEffectText", () => {
+  it("throws on empty effect fields and passes when either is set", () => {
+    expect(() =>
+      assertEffectText("ability", "bulletproof", {
+        effect_short: "",
+        effect_full: "",
+      }),
+    ).toThrow(/ability\/bulletproof/);
+    expect(() =>
+      assertEffectText("move", "aura-sphere", {
+        effect_short: "This move does not check accuracy.",
+        effect_full: "",
+      }),
+    ).not.toThrow();
   });
 });

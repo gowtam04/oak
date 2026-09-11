@@ -64,6 +64,24 @@ class EntityArtifactDecodeTest {
         assertNull(data.hitsAllies)
         assertNull(data.spreadModifierDoubles)
         assertNull(data.gen9LearnerCount)
+        assertEquals(listOf("nonsky", "protect", "mirror"), data.flags)
+    }
+
+    @Test
+    fun moveArtifactMissingFlagsDecodesToEmptyList() {
+        val json =
+            """
+            {"status":"ok","kind":"move","format":"champions",
+             "resolved":{"slug":"fake-out","display_name":"Fake Out"},
+             "generation":"Champions","is_fallback":false,"citations":[],
+             "data":{"display_name":"Fake Out","type":"normal",
+             "damage_class":"physical","power":40,"accuracy":100,"pp":10,
+             "priority":3,"target":"normal","effect_short":"Flinch.",
+             "effect_full":"Flinch."}}
+            """.trimIndent()
+        val artifact = OakJson.decodeFromString<EntityArtifact>(json)
+        val data = ((artifact as EntityArtifact.Ok).v.data as EntityData.Move).v
+        assertTrue(data.flags.isEmpty())
     }
 
     @Test

@@ -18,6 +18,7 @@
     "priority": 0,
     "target": "all-other-pokemon",
     "effect_short": "Hits all adjacent Pokémon.",
-    "effect_full": "Inflicts regular damage and hits all adjacent Pokémon."
+    "effect_full": "Inflicts regular damage and hits all adjacent Pokémon.",
+    "flags": ["nonsky", "protect", "mirror"]
   }
 }

@@ -31,6 +31,9 @@ export default function MoveArtifact({
     { label: "Priority", value: String(data.priority) },
     { label: "Target", value: data.target },
   ];
+  if (data.flags && data.flags.length > 0) {
+    stats.push({ label: "Flags", value: data.flags.join(", ") });
+  }
 
   const plateStyle = {
     ["--plate-a" as string]: typeCssVar(data.type),

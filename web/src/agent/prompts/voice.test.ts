@@ -40,6 +40,7 @@ describe("buildVoiceInstructions", () => {
     expect(instructions).toContain("get_move");
     expect(instructions).toContain("estimate_damage");
     expect(instructions).toContain("get_usage_stats");
+    expect(instructions).toContain("flags list");
   });
 
   it("never mentions submit_answer — voice has no structured output contract", () => {

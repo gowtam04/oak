@@ -6,7 +6,9 @@
  * ingest. Output payload shapes match the tool contracts in schemas.ts exactly
  * (MoveDetail, AbilityDetail, TypeMatchupsDetail, EvolutionChainDetail,
  * ItemDetail); only the effect TEXT differs from the old PokeAPI prose (it now
- * comes from Showdown desc/shortDesc — an accepted, documented drift).
+ * comes from Showdown `data/text` desc/shortDesc, merged onto the mechanics
+ * tables at load — an accepted, documented drift). Move payloads also carry
+ * Showdown `flags` (bullet, pulse, sound, …).
  */
 
 import type { Format } from "@/data/formats";
@@ -73,6 +75,7 @@ export function normalizeMove(m: {
   spreadModifier?: number;
   shortDesc?: string;
   desc?: string;
+  flags?: object | null;
 }): MoveDetail {
   const dc = m.category.toLowerCase();
   const damage_class: "physical" | "special" | "status" =
@@ -96,7 +99,17 @@ export function normalizeMove(m: {
     spread_modifier_doubles,
     effect_short: m.shortDesc ?? "",
     effect_full: m.desc || m.shortDesc || "",
+    flags: moveFlagNames(m.flags),
   };
+}
+
+/** Sorted Showdown flag names whose value is truthy (`{ bullet: 1 }` → `["bullet"]`). */
+export function moveFlagNames(flags?: object | null): string[] {
+  if (!flags || typeof flags !== "object") return [];
+  return Object.entries(flags as Record<string, unknown>)
+    .filter(([, value]) => Boolean(value))
+    .map(([name]) => name)
+    .sort();
 }
 
 export function normalizeAbility(a: {
@@ -123,6 +136,18 @@ export function normalizeItem(i: {
     effect_short: i.shortDesc ?? "",
     effect_full: i.desc || i.shortDesc || "",
   };
+}
+
+/** Fail ingest rather than write another silent-empty Champions index. */
+export function assertEffectText(
+  kind: "move" | "ability" | "item",
+  slug: string,
+  payload: { effect_short: string; effect_full: string },
+): void {
+  if (payload.effect_short.trim() || payload.effect_full.trim()) return;
+  throw new Error(
+    `empty effect text for ${kind}/${slug}; vendor data/text is missing or unmatched`,
+  );
 }
 
 /**
@@ -276,17 +301,23 @@ export function buildReferenceRows(
   // Moves
   for (const m of source.moves) {
     const slug = slugFor(m.id, m.name);
-    push("move", `move/${slug}`, normalizeMove(m));
+    const payload = normalizeMove(m);
+    assertEffectText("move", slug, payload);
+    push("move", `move/${slug}`, payload);
   }
   // Abilities
   for (const a of source.abilities) {
     const slug = slugFor(a.id, a.name);
-    push("ability", `ability/${slug}`, normalizeAbility(a));
+    const payload = normalizeAbility(a);
+    assertEffectText("ability", slug, payload);
+    push("ability", `ability/${slug}`, payload);
   }
   // Items
   for (const i of source.items) {
     const slug = slugFor(i.id, i.name);
-    push("item", `item/${slug}`, normalizeItem(i));
+    const payload = normalizeItem(i);
+    assertEffectText("item", slug, payload);
+    push("item", `item/${slug}`, payload);
   }
   // Types
   const battleTypes = source.types.map((t) => ({

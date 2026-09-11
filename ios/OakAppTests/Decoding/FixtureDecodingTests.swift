@@ -317,6 +317,7 @@ struct FixtureDecodingTests {
       #expect(data.damageClass == .physical)
       #expect(data.power == 100)
       #expect(data.hitsAllies == nil)
+      #expect(data.flags == ["nonsky", "protect", "mirror"])
     } else {
       Issue.record("entity_move should decode to ok/move")
     }
