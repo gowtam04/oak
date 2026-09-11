@@ -24,6 +24,12 @@ describe("sprites — PokeAPI base URLs (national dex number)", () => {
     expect(pokeApiArtwork(445)).toBe(
       "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/445.png",
     );
+    // Form/variety ids use the same path; the sprite proxy may pass these
+    // after a Showdown 404. They are not national dex and must not go through
+    // /api/media/artwork/{dex}.
+    expect(pokeApiArtwork(10307)).toBe(
+      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10307.png",
+    );
   });
 });
 

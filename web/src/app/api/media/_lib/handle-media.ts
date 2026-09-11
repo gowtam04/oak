@@ -18,6 +18,15 @@ export async function handleMediaGet(opts: {
   defaultContentType: string;
   /** When false, the param was invalid — return 400 without hitting upstream. */
   valid: boolean;
+  /**
+   * Tried only when the primary upstream returns 404. Distinct `cacheKey` so
+   * a later primary success is not stuck behind fallback bytes.
+   */
+  fallback?: {
+    cacheKey: string;
+    upstreamUrl: string;
+    defaultContentType: string;
+  };
 }): Promise<Response> {
   if (!opts.valid) {
     return mediaErrorResponse(400, "invalid_param");
@@ -43,8 +52,19 @@ export async function handleMediaGet(opts: {
     opts.upstreamUrl,
     opts.defaultContentType,
   );
-  if (!result.ok) {
-    return mediaErrorResponse(result.status, result.reason);
+  if (result.ok) {
+    return mediaSuccessResponse(result.body, result.contentType);
   }
-  return mediaSuccessResponse(result.body, result.contentType);
+  if (result.status === 404 && opts.fallback) {
+    const fallback = await proxyMedia(
+      opts.fallback.cacheKey,
+      opts.fallback.upstreamUrl,
+      opts.fallback.defaultContentType,
+    );
+    if (!fallback.ok) {
+      return mediaErrorResponse(fallback.status, fallback.reason);
+    }
+    return mediaSuccessResponse(fallback.body, fallback.contentType);
+  }
+  return mediaErrorResponse(result.status, result.reason);
 }

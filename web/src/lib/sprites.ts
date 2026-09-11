@@ -36,7 +36,12 @@ export function pokeApiSprite(num: number): string {
   return `${POKEAPI_BASE}/${num}.png`;
 }
 
-/** PokeAPI official artwork for a national dex number (upstream only). */
+/**
+ * PokeAPI official artwork for a PokeAPI sprites id (upstream only).
+ * National dex for `/api/media/artwork/{dex}`; form/variety ids only as the
+ * sprite-proxy 404 fallback (see `pokeApiFormIdForSpriteId`). Not a public
+ * artwork-by-form route — form ids are a different namespace from NatDex.
+ */
 export function pokeApiArtwork(num: number): string {
   return `${POKEAPI_BASE}/other/official-artwork/${num}.png`;
 }
@@ -73,8 +78,9 @@ export function showdownSpriteId(
 }
 
 /**
- * Animated Showdown sprite URL for a spriteid (upstream only). The `ani/`
- * directory covers every form including the Pokémon Champions Megas.
+ * Animated Showdown sprite URL for a spriteid (upstream only). Most forms
+ * live here; a handful of Regulation M-C megas 404 and the sprite media
+ * proxy falls back to PokeAPI official artwork via `pokeApiFormIdForSpriteId`.
  */
 export function showdownAniSprite(spriteId: string): string {
   return `https://play.pokemonshowdown.com/sprites/ani/${spriteId}.gif`;
