@@ -91,9 +91,9 @@ import androidx.compose.ui.unit.dp
  * never color alone) and sprites the shared [SpriteImage].
  *
  * Drilling deeper (M-ART-US-3 / M-AC-A3.1): the entities **inside** a profile are
- * tappable — a Pokémon's movepool moves and matchup types, a move/type's matchup
- * types, an ability's holders, an item's wild holders — each calling [onOpen] to push
- * a new artifact onto the viewer's back stack.
+ * tappable — a Pokémon's abilities, movepool moves, and matchup types, a move/type's
+ * matchup types, an ability's holders — each calling [onOpen] to push a new artifact
+ * onto the viewer's back stack.
  */
 private enum class PokemonProfileTab { Summary, Usage }
 
@@ -241,22 +241,38 @@ private fun PokemonBody(
         }
     }
 
-    AbilitiesSection(data.abilities)
+    AbilitiesSection(data.abilities, onOpen)
     BaseStatsSection(data.baseStats, data.baseStatTotal, primaryType = data.types.firstOrNull())
     MatchupsSection(data.matchups.weakTo, data.matchups.resists, data.matchups.immuneTo, data.matchups.quadWeakTo.orEmpty(), data.matchups.quadResists.orEmpty(), onOpen)
     MovepoolSection(data.movepool, onOpen)
 }
 
 @Composable
-private fun AbilitiesSection(abilities: Abilities) {
+private fun AbilitiesSection(abilities: Abilities, onOpen: (EntityKind, String) -> Unit) {
     val rows = buildList {
-        add("Ability" to titleizeNonNull(abilities.slot1))
-        abilities.slot2?.takeIf { it.isNotEmpty() }?.let { add("Ability" to titleizeNonNull(it)) }
-        abilities.hidden?.takeIf { it.isNotEmpty() }?.let { add("Hidden" to titleizeNonNull(it)) }
+        add("Ability" to abilities.slot1)
+        abilities.slot2?.takeIf { it.isNotEmpty() }?.let { add("Ability" to it) }
+        abilities.hidden?.takeIf { it.isNotEmpty() }?.let { add("Hidden" to it) }
     }
+    val oak = LocalOakColors.current
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         SectionHeader("Abilities")
-        for ((label, value) in rows) InfoRow(label, value)
+        for ((label, slug) in rows) {
+            val name = titleizeNonNull(slug)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = { onOpen(EntityKind.ABILITY, slug) }, onClickLabel = "Open $name"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(label, style = MaterialTheme.typography.bodyMedium, color = oak.textMuted)
+                Text(
+                    name,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = oak.textStrong,
+                )
+            }
+        }
     }
 }
 

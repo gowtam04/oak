@@ -12,8 +12,8 @@ import SwiftUI
 /// shared ``SpriteImage``.
 ///
 /// Drilling deeper (M-ART-US-3 / M-AC-A3.1): the entities **inside** a profile are tappable —
-/// a Pokémon's movepool moves and matchup types, a move/type's matchup types, an ability's
-/// holders, an item's wild holders — each calling ``onOpen`` to push a new artifact onto the
+/// a Pokémon's abilities, movepool moves, and matchup types, a move/type's matchup types,
+/// an ability's holders — each calling ``onOpen`` to push a new artifact onto the
 /// viewer's back stack.
 private enum PokemonArtifactTab: String, CaseIterable {
   case summary
@@ -192,13 +192,13 @@ struct EntityDetailView: View {
   }
 
   private func abilitiesSection(_ abilities: Abilities) -> some View {
-    let rows: [(String, String)] = {
-      var out: [(String, String)] = [("Ability", Self.titleize(abilities.slot1))]
+    let rows: [(label: String, slug: String)] = {
+      var out: [(label: String, slug: String)] = [("Ability", abilities.slot1)]
       if let slot2 = abilities.slot2, !slot2.isEmpty {
-        out.append(("Ability", Self.titleize(slot2)))
+        out.append(("Ability", slot2))
       }
       if let hidden = abilities.hidden, !hidden.isEmpty {
-        out.append(("Hidden", Self.titleize(hidden)))
+        out.append(("Hidden", hidden))
       }
       return out
     }()
@@ -207,9 +207,36 @@ struct EntityDetailView: View {
     // (instrumentLabel prune, Phase 3).
     return VStack(alignment: .leading, spacing: 6) {
       ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-        infoRow(label: row.0, value: row.1)
+        abilityRow(label: row.label, slug: row.slug)
       }
     }
+  }
+
+  /// One ability slot as a full-width pressable row: left self-label
+  /// ("Ability"/"Hidden"), right titleized name. Tap opens the ability
+  /// artifact the same way a movepool chip opens a move (M-AC-A3.1).
+  private func abilityRow(label: String, slug: String) -> some View {
+    let name = Self.titleize(slug)
+    return Button {
+      onOpen(.ability, slug)
+    } label: {
+      HStack(alignment: .firstTextBaseline) {
+        Text(label)
+          .font(Theme.body(.subheadline))
+          .foregroundStyle(Theme.textSecondary)
+        Spacer(minLength: 12)
+        Text(name)
+          .font(Theme.body(.subheadline, weight: .semibold))
+          .foregroundStyle(Theme.textPrimary)
+          .multilineTextAlignment(.trailing)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .frame(maxWidth: .infinity)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(OakPressableButtonStyle())
+    .accessibilityLabel("\(label) \(name)")
+    .accessibilityHint("Opens \(name)")
   }
 
   private func baseStatsSection(_ stats: BaseStats, total: Int, primaryType: String) -> some View {

@@ -25,6 +25,8 @@ import ai.gowtam.oak.wire.WildItemHolder
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -78,10 +80,33 @@ class EntityDetailRenderTest {
             ),
         )
 
-        composeTestRule.setContent { OakTheme { EntityDetail(artifact = artifact, requestFormat = artifact.format, onOpen = { _, _ -> }) } }
+        val opened = mutableListOf<Pair<EntityKind, String>>()
+        composeTestRule.setContent {
+            OakTheme {
+                EntityDetail(
+                    artifact = artifact,
+                    requestFormat = artifact.format,
+                    onOpen = { kind, q -> opened += kind to q },
+                )
+            }
+        }
 
         composeTestRule.onNodeWithText("Garchomp").assertIsDisplayed()
         composeTestRule.onNodeWithText("Dragon Claw").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Sand Veil").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Rough Skin").assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("Sand Veil").performClick()
+        composeTestRule.onNodeWithText("Rough Skin").performClick()
+        composeTestRule.onNodeWithText("Dragon Claw").performClick()
+        assertEquals(
+            listOf(
+                EntityKind.ABILITY to "sand-veil",
+                EntityKind.ABILITY to "rough-skin",
+                EntityKind.MOVE to "dragon-claw",
+            ),
+            opened,
+        )
     }
 
     @Test
