@@ -23,7 +23,7 @@ function chip() {
   return screen.getByTestId("scope-chip");
 }
 
-/** "Regulation M-B" → "Reg M-B" (short chip form) or the full constant. */
+/** Full `CHAMPIONS_REGULATION` or its short chip form (`Regulation …` → `Reg …`). */
 const REGULATION_RE = new RegExp(
   `${escapeRe(CHAMPIONS_REGULATION)}|${escapeRe(
     CHAMPIONS_REGULATION.replace(/^Regulation\b/, "Reg").trim(),

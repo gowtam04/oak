@@ -2,7 +2,7 @@
  * Human-readable scope labels (generation-scope GS-C / §4.3).
  *
  * A tiny PURE helper the scope chip (web) and a future iOS client both reuse to
- * render the active format as a short pill — "Champions · Reg M-B",
+ * render the active format as a short pill — "Champions · Reg M-C",
  * "Gen 9 · Scarlet/Violet", "Gen 7 · USUM". It only reads pure constants from
  * `@/data/formats` (no `server-only`, no `@/env`, no DB), so it stays on the
  * portable-modules list alongside `detect-scope.ts`.

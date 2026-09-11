@@ -169,9 +169,11 @@ A single **TypeScript / Next.js (App Router) monolith** — one language across
 frontend, API, agent loop, and the ingest CLI.
 
 - **Data** — **Postgres + Drizzle ORM** (node-postgres). One Champions format
-  index built offline from the [`@pkmn`](https://github.com/pkmn) ecosystem
-  (`@pkmn/dex`, `@pkmn/data`, `@pkmn/mods`). Wiki, national-dex warehouse,
-  encounter, PMD, and Smogon OU tables are dropped. See [Data](#data).
+  index built offline from a **pinned Pokémon Showdown SHA**
+  (`web/vendor/pokemon-showdown/`, `SHOWDOWN_PIN`) with [`@pkmn/dex`](https://github.com/pkmn)
+  as the Dex.mod / Dex.forGen engine. npm `@pkmn/mods` is not the roster clock.
+  Wiki, national-dex warehouse, encounter, PMD, and Smogon OU tables are
+  dropped. See [Data](#data).
 - **Agent** — a provider-agnostic tool-loop over **17 tools** that return
   structured facts; the model reasons on top and emits a Zod-validated
   `OakAnswer`.
@@ -194,18 +196,24 @@ frontend, API, agent loop, and the ingest CLI.
 ## Data
 
 Everything the agent reads lives in Postgres, built by `npm run ingest` — which
-is **fully offline and deterministic** (it reads local `@pkmn` packages, never
-the network). Pokémon `sprite_url` / `artwork_url` values are absolute
-first-party media links (`/api/media/sprite|artwork|dex-sprite`), proxied at
-request time from Showdown / PokeAPI with a long cache — after changing those
-URL helpers, **re-ingest** so index rows pick up the new hosts.
+is **fully offline and deterministic**. Champions roster bytes come from the
+vendored Showdown pin (`web/vendor/pokemon-showdown/` at `SHOWDOWN_PIN`);
+`@pkmn/dex` is only the overlay engine. Ingest never hits the network (the
+only fetch is `web/scripts/sync-showdown-pin.sh` when cutting over). Pokémon
+`sprite_url` / `artwork_url` values are absolute first-party media links
+(`/api/media/sprite|artwork|dex-sprite`), proxied at request time from Showdown
+/ PokeAPI with a long cache — after changing those URL helpers, **re-ingest**
+so index rows pick up the new hosts.
 
 **Champions-only ingest (ADR-4).** `DEFAULT_FORMATS = ["champions"]`. Ingest
-builds the Champions pokedex, learnsets, searchable names, and reference cache,
-then writes `ingest_meta`. Other-game warehouse pipelines (wiki, national-dex,
-encounters, PMD, Smogon meta) are gone. `npm run sync:meta` is **retired** —
-live Champions usage is fetched at request time by T15, not stored as monthly
-OU rows.
+builds the Champions pokedex, learnsets, searchable names, and reference cache
+from the Showdown pin, then writes `ingest_meta`. Other-game warehouse
+pipelines (wiki, national-dex, encounters, PMD, Smogon meta) are gone.
+`npm run sync:meta` is **retired** — live Champions usage is fetched at
+request time by T15 (championsbattledata.com), not stored as monthly OU rows.
+Regulation cutover:
+[`docs/features/champions-first/regulation-cutover.md`](docs/features/champions-first/regulation-cutover.md).
+Do not bump npm `@pkmn/mods` to stay current.
 
 The historical `Format` union (`national-dex`, `gen-1`…`gen-8`,
 `scarlet-violet`, `champions`) remains so **archived teams** and old
@@ -228,7 +236,7 @@ npm install
 cp .env.example .env.local   # add XAI_API_KEY (required); other keys are optional
 npm run docker:dev           # Postgres + next dev on :3000 (the intended dev environment)
 npm run docker:migrate       # apply Drizzle migrations
-npm run docker:ingest        # build the Champions index from @pkmn (migrates first)
+npm run docker:ingest        # build the Champions index from the Showdown pin (migrates first)
 ```
 
 Only `XAI_API_KEY` is required to boot (Grok is the default model). The other
@@ -270,7 +278,7 @@ npm run db:migrate && npm run ingest && npm run dev
 | `npm run lint`            | `eslint .`.                                                           |
 | `npm run db:generate`     | `drizzle-kit generate` — author a new migration from the schema.      |
 | `npm run db:migrate`      | Apply Drizzle migrations to `$DATABASE_URL`.                          |
-| `npm run ingest`          | (Re)build the Champions Postgres index from `@pkmn` (migrates first). Offline. Default `--formats=champions`. |
+| `npm run ingest`          | (Re)build the Champions Postgres index from the Showdown pin (migrates first). Offline. Default `--formats=champions`. |
 | `npm run eval`            | Full LLM-judge golden suite (needs live `XAI_API_KEY` + `ANTHROPIC_API_KEY`). |
 | `npm run docker:*`        | Docker-Compose helpers (`dev`, `down`, `migrate`, `ingest`, `logs`, `psql`, `sh`). |
 
@@ -397,6 +405,7 @@ on Redis being up.
 | Doc                                                                      | What it covers                                                                                          |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | [`docs/features/champions-first/`](docs/features/champions-first/)       | **Current product** — Champions-only coach: requirements, ADRs, implementation plan.                    |
+| [`docs/features/champions-first/regulation-cutover.md`](docs/features/champions-first/regulation-cutover.md) | How to pin the next Champions regulation (Showdown SHA, not npm `@pkmn/mods`). |
 | [`docs/requirements/requirements.md`](docs/requirements/requirements.md) | Historical core requirements — superseded where they conflict with champions-first.                     |
 | [`docs/agent-design/`](docs/agent-design/)                               | Historical agent internals; ADR-2 is the append-only exception (17 tools, new cache prefix).            |
 | [`docs/architecture/design.md`](docs/architecture/design.md)             | Technical design — stack, data store, ingest pipeline. Predates several choices.                        |

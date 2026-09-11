@@ -7,7 +7,7 @@ import { regulationChipLabel } from "@/data/formats";
  * `"gen-1"`…`"gen-8"` (mainline generations, including the pre-Gen-9 scopes,
  * all flow through the trailing-digit branch below unchanged).
  *
- * The returned string stays mixed-case (e.g. "Champions · Reg M-B", "Gen 9")
+ * The returned string stays mixed-case (e.g. "Champions · Reg M-C", "Gen 9")
  * — `.ilabel` uppercases it for display, same pattern as
  * `CandidateTable`'s `sort-field` label (data stays readable case, CSS does
  * the instrument-voice transform).

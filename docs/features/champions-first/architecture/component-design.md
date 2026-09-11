@@ -37,10 +37,10 @@ Stop calling `detect-scope.ts` from the route. Leave the file until the docs/eva
 
 | Aspect | Detail |
 |--------|--------|
-| Responsibility | Offline `@pkmn` Champions ingest + repo reads |
+| Responsibility | Offline Champions ingest + repo reads |
 | Owns | ingest default formats; gen-provider champions path; pokedex/learnset/reference repos (unchanged signatures, data is champions-only) |
 | Exposes | Existing repo functions; `format` argument should be passed `"champions"` from callers |
-| Depends on | `@pkmn/mods/champions`, Postgres |
+| Depends on | Showdown pin (`web/vendor/pokemon-showdown/`, `SHOWDOWN_PIN`), `@pkmn/dex` (Dex.mod engine), Postgres |
 | File location | `web/src/ingest/**`, `web/src/data/pkmn/gen-provider.ts`, `web/src/data/repos/pokedex-repo.ts` (etc.) |
 
 ### ReferenceCutover

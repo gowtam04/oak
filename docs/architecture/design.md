@@ -36,14 +36,16 @@ architecture pass; the sections below have been reconciled with the shipped code
 Five things changed materially after the original design and are reflected
 throughout this doc — recorded here as well so the divergence is explicit:
 
-1. **Data source: PokeAPI → the `@pkmn` ecosystem.** All index data now comes
-   from local npm packages (`@pkmn/dex`, `@pkmn/data`, `@pkmn/mods`) — there is
-   **no network call, no throttle/retry, and no read-through cache**. The
-   throttled `src/data/pokeapi-client.ts` and `src/ingest/warm-cache.ts` were
-   never built; their role is filled by `src/data/pkmn/gen-provider.ts` (the
-   single `@pkmn` integration point) and an ingest that builds the
-   `reference_cache` **eagerly** (`src/ingest/build-reference.ts`). BR-8 (PokeAPI
-   fair-use) is therefore moot — nothing calls upstream.
+1. **Data source: PokeAPI → `@pkmn/dex` + a pinned Showdown SHA.** All index
+   data now comes from local `@pkmn/dex` / `@pkmn/data` plus, for Champions, the
+   vendored Showdown pin (`web/vendor/pokemon-showdown/`, `SHOWDOWN_PIN`) — there
+   is **no network call, no throttle/retry, and no read-through cache**. npm
+   `@pkmn/mods` is not the Champions roster clock. The throttled
+   `src/data/pokeapi-client.ts` and `src/ingest/warm-cache.ts` were never built;
+   their role is filled by `src/data/pkmn/gen-provider.ts` (the single `@pkmn`
+   integration point) and an ingest that builds the `reference_cache`
+   **eagerly** (`src/ingest/build-reference.ts`). BR-8 (PokeAPI fair-use) is
+   therefore moot — nothing calls upstream.
 2. **Two formats (standard + Champions).** Every data table carries a `format`
    discriminator (`"scarlet-violet"` | `"champions"`) and composite PKs include
    it. The active format is derived from a **server-controlled** `AgentMode`
@@ -93,7 +95,7 @@ storage, file layout, and phasing.
 | Validation          | **Zod** (+ `zod-to-json-schema`)                          | Single source of truth → runtime validation, TS types, and the Anthropic tool / `submit_answer` JSON Schemas. |
 | LLM SDK             | **`@anthropic-ai/sdk`**, model **Sonnet 4.6**             | Streaming tool-loop, prompt caching, `tool_choice: "auto"` + adaptive thinking (forced + thinking = 400; D2). |
 | Fuzzy resolve       | `fuse.js`                                                 | In-memory matcher for `resolve_entity` over the names table.                                                  |
-| Data source         | **`@pkmn/dex` · `@pkmn/data` · `@pkmn/mods`**             | Local packages — Showdown's dex/learnsets + the `champions` mod. **No network**; ingest builds offline.       |
+| Data source         | **`@pkmn/dex` · `@pkmn/data` · Showdown pin**             | `@pkmn/dex` is Dex.mod / Dex.forGen. Champions bytes: `SHOWDOWN_PIN` (`web/vendor/pokemon-showdown/`). **No network**; ingest builds offline. npm `@pkmn/mods` is not the roster clock. |
 | Logging             | **pino** → stdout                                         | Structured per-turn trace (see `integration.md`).                                                             |
 | Tests               | **Vitest**                                                | Unit + integration; eval harness split (deterministic CI subset vs. nightly LLM-judge).                       |
 | Tooling             | tsx (script runner), ESLint + Prettier, TypeScript strict | `npm run ingest`, `npm run eval` via tsx.                                                                     |
@@ -208,7 +210,7 @@ code lives and how it's wired_, not _what the agent does_.
 | Component                                              | Responsibility                                                                                                                                                                                                                                                                                                         | Exposes                                                         | Depends on                         |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------- |
 | **Ingest pipeline** (`src/ingest/`)                    | Build `pokemon`, `learnset`, `searchable_names`, `reference_cache` **per format** from the `@pkmn` packages; write `ingest_meta`. Build-all-in-memory then swap each table in one transaction; idempotent. `@pkmn` is local → no upstream, no reuse-last-good.                                                          | `runIngest(opts): Promise<IngestReport>`; `npm run ingest` CLI. | gen-provider, Drizzle schema.      |
-| **`@pkmn` provider** (`src/data/pkmn/gen-provider.ts`) | The _only_ code that touches `@pkmn`. `loadFormat(format)` resolves the gen-scoped or modded dex, the legal roster, moves/abilities/items/types, and `getLearnset`. No network.                                                                                                                                       | `loadFormat(format): Promise<FormatSource>`; `slugFor`.         | `@pkmn/dex`, `@pkmn/mods`.         |
+| **`@pkmn` provider** (`src/data/pkmn/gen-provider.ts`) | The _only_ code that touches `@pkmn` / the Showdown pin. `loadFormat(format)` resolves the gen-scoped or modded dex, the legal roster, moves/abilities/items/types, and `getLearnset`. Champions bytes from `SHOWDOWN_PIN`; `@pkmn/dex` is Dex.mod / Dex.forGen. npm `@pkmn/mods` is not the regulation clock. No network. | `loadFormat(format): Promise<FormatSource>`; `slugFor`.         | `@pkmn/dex`, Showdown pin.         |
 | **Data-access repositories** (`src/data/repos/`)       | Typed reads over SQLite, scoped to the turn's format. `PokedexRepo` (dynamic filter/sort/threshold SQL for `query_pokedex`), `LearnsetRepo` (intersection), `ReferenceCache` (reads the pre-built rows), `ResolveIndex` (in-memory fuzzy).                                                                             | Repo methods returning Result unions.                           | Drizzle.                           |
 | **Formula functions** (`src/agent/formulas/`)          | Deterministic `compute_stat` / `estimate_damage` (D5) — pure functions, per-step flooring.                                                                                                                                                                                                                             | `computeStat(...)`, `estimateDamage(...)`.                      | none.                              |
 | **Tool layer** (`src/agent/tools/`)                    | The 11 tool implementations (T1–T11) wrapping repos + formulas; each returns the exact structured shape in `tools.md`; Zod input/output schemas → JSON Schema for the SDK.                                                                                                                                             | `tools: ToolDef[]`; `submitAnswerSchema`.                       | repos, formulas, Zod.              |

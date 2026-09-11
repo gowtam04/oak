@@ -6,6 +6,8 @@
 
 import { describe, it, expect } from "vitest";
 
+import { CHAMPIONS_REGULATION } from "@/data/formats";
+
 import {
   entityArtifactResponseSchema,
   type EntityArtifactResponse,
@@ -69,7 +71,7 @@ const OK_MOVE: EntityArtifactResponse = {
   kind: "move",
   format: "champions",
   resolved: { slug: "earthquake", display_name: "Earthquake" },
-  generation: "Champions — Regulation M-B",
+  generation: `Champions — ${CHAMPIONS_REGULATION}`,
   is_fallback: false,
   citations: [{ source: "move/earthquake", detail: "Power, accuracy, PP." }],
   data: {

@@ -24,6 +24,10 @@ DROPPED: wiki_page, wiki_chunk, natdex_*, classic_encounters,
 
 Unchanged columns. **Invariant after migration:** `format = 'champions'` only.
 
+- **Ingest source:** pinned Showdown SHA (`web/vendor/pokemon-showdown/`,
+  `SHOWDOWN_PIN` in `web/src/data/pkmn/showdown-pin.ts`). `@pkmn/dex` is the
+  Dex.mod overlay engine. npm `@pkmn/mods` is not the roster clock. T15 /
+  championsbattledata.com is usage only.
 - **Ownership:** global reference (not account-scoped)
 - **Lifecycle:** ingest replace-per-format (DELETE champions + INSERT). Other formats are gone.
 - **Requirement trace:** CF-DATA-BR-3, CF-DEX-US-1, CF-OPS-US-1
@@ -75,7 +79,10 @@ UsageSpecies     { ...existing UsageData..., available }
 
 ### Current regulation
 
-Still the constant `CHAMPIONS_REGULATION` in `formats.ts` (not a table). Chip reads it (CF-DATA-BR-1–2).
+Still the constant `CHAMPIONS_REGULATION` in `formats.ts` (not a table). Chip
+reads it (CF-DATA-BR-1–2). It tracks the pinned Showdown SHA
+(`SHOWDOWN_PIN`), not npm `@pkmn/mods`. Flip the chip only after ingest gates
+pass. Cutover: [`regulation-cutover.md`](../regulation-cutover.md).
 
 ## Relationships
 

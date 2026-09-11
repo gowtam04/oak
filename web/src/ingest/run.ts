@@ -2,7 +2,8 @@
  * src/ingest/run.ts — the `npm run ingest` CLI + `runIngest()` orchestrator.
  *
  * Builds the Champions index (DS-2 pokemon, DS-3 learnset, searchable_names,
- * DS-4 reference_cache) from the @pkmn ecosystem (local packages — no network):
+ * DS-4 reference_cache) from the pinned Showdown data + @pkmn/dex overlay
+ * (local vendor/npm — no network at ingest time):
  *
  *     loadFormat(champions) → build-pokedex → build-learnsets
  *                           → build-names → build-reference
@@ -239,8 +240,11 @@ export async function runIngest(
   const formatReports: FormatReport[] = [];
 
   for (const format of formats) {
-    report(`[${format}] loading @pkmn data…`);
+    report(`[${format}] loading data…`);
     const source = await loadFormat(format);
+    if (source.showdownPin) {
+      report(`[${format}] Showdown pin ${source.showdownPin}`);
+    }
     // A mainline format keeps only its own generation's learnset sources; the
     // filter is the format's Dex gen. Champions uses the mod's already-scoped
     // learnset as-is → no gen filter.

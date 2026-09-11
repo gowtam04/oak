@@ -21,6 +21,7 @@ module.exports = {
     "build/",
     "coverage/",
     "data/",
+    "vendor/",
     "drizzle/",
     "next-env.d.ts",
   ],

@@ -151,7 +151,7 @@ export const reference_cache = pgTable(
     resource_kind: text("resource_kind").notNull(),
     /** Normalized detail shape the tool returns (JSON string, not raw source). */
     payload: text("payload").notNull(),
-    /** Source label for citations (e.g. "@pkmn/dex (Pokémon Showdown)"). */
+    /** Source label for citations (e.g. "Pokémon Showdown <sha> (@pkmn/dex overlay)"). */
     endpoint_url: text("endpoint_url").notNull(),
     /** Epoch milliseconds the row was built (informational; no TTL anymore). */
     fetched_at: bigint("fetched_at", { mode: "number" }).notNull(),

@@ -181,7 +181,7 @@ System body must include: Oak covers Pokémon Champions (current `CHAMPIONS_REGU
 | Provider | Owned by | Failure handling | Secrets |
 |----------|----------|------------------|---------|
 | championsbattledata.com | UsageGateway / T15 | `available: false` / `{ error: "upstream_unavailable" }`; no Smogon fallback | none (keyless). `CHAMPIONSBATTLEDATA_BASE_URL` already in env |
-| `@pkmn/mods/champions` | ingest (offline) | ingest failure = empty champions index → tools `index_unavailable` | none |
+| Showdown pin (`SHOWDOWN_PIN` / `web/vendor/pokemon-showdown/`) | ingest (offline) | ingest failure = empty champions index → tools `index_unavailable`. `@pkmn/dex` is Dex.mod engine only; npm `@pkmn/mods` is not the roster clock. | none |
 | xAI / Anthropic / OpenAI | existing agent | unchanged | existing keys |
 
 Removed: Tavily (already gone), Smogon chaos sync (`sync:meta` retired from ops), Fandom wiki fetch.

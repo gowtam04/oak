@@ -13,8 +13,8 @@
  *   - display-name → legacy-slug slugify (incl. a documented divergence),
  *   - getLearnset's shape + {} fallback.
  *
- * Fully offline — @pkmn ships its dex data as local npm packages (no DB, no
- * network, no mocks). Values were cross-checked against @pkmn 0.10.11.
+ * Fully offline — @pkmn ships gen-scope dex data as local npm packages; Champions
+ * bytes come from the vendored Showdown pin (no DB, no network, no mocks).
  */
 
 import { beforeAll, describe, expect, it } from "vitest";
@@ -80,7 +80,7 @@ describe("loadFormat", () => {
 
   beforeAll(async () => {
     standard = await loadFormat("scarlet-violet");
-    // Exercises the dynamic import of @pkmn/mods/champions + Dex.mod.
+    // Exercises the Showdown pin + Dex.mod Champions path.
     champions = await loadFormat("champions");
     // Exercises a mainline gen scope (generation-scope feature): Dex.forGen(7).
     gen7 = await loadFormat("gen-7");
@@ -156,12 +156,13 @@ describe("loadFormat", () => {
     it("stamps the format and resolves a smaller, gated roster", () => {
       expect(champions.format).toBe("champions");
       expect(champions.genNumber).toBe(9); // Champions rides the Gen 9 dex.
-      // The FormatsData isNonstandard gate (~314), NOT species.all() (~1416).
-      expect(champions.roster.length).toBeGreaterThan(200);
+      // FormatsData isNonstandard gate (Reg M-C: >320 and <500), NOT species.all() (~1416).
+      expect(champions.roster.length).toBeGreaterThan(320);
+      expect(champions.roster.length).toBeLessThan(500);
       expect(champions.roster.length).toBeLessThan(standard.roster.length);
     });
 
-    it("gates out restricted mons that standard keeps (Reg M-B)", () => {
+    it("gates out restricted mons that standard keeps (current regulation / M-C)", () => {
       for (const id of ["mewtwo", "koraidon", "miraidon"]) {
         expect(standardIds.has(id)).toBe(true); // present in standard
         expect(championIds.has(id)).toBe(false); // gated out of champions
