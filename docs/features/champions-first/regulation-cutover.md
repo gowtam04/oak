@@ -117,12 +117,37 @@ cd web && npm run ingest
 
 Needs reachable Postgres. Default is Champions-only.
 
-### 6. Set `CHAMPIONS_REGULATION`
+Ingest indexes every Gen-9 item. Champions legality is the operator
+allowlist (`champions_item_exclusion`, `/admin/champions-items`) — ingest does
+**not** flip availability. Returning items (Air Balloon, Rocky Helmet, a Mega
+Stone that was already a Future id, …) stay excluded from the previous
+regulation's curation. Brand-new slugs default to available; everything else
+does not.
+
+### 6. Update the Champions item allowlist
+
+Compare the official held-item + Mega Stone + berry listing (Serebii
+`/pokemonchampions/items.shtml` is the full pool; the regulation page's
+"newly added" table often omits Mega Stones) against
+`GET /api/search?kind=item` on prod.
+
+- **Added:** enable only those slugs (admin checkboxes, or
+  `DELETE FROM champions_item_exclusion WHERE slug IN (…)`, then restart
+  `oak-gowtam` so the in-process resolve index rebuilds). Never Select all —
+  that legalizes the rest of the Gen-9 universe.
+- **Removed:** exclude those slugs. M-C removed none.
+- Confirm `GET /api/search?kind=item` matches the official count and that a
+  still-illegal item (Choice Band, Assault Vest) stays absent.
+
+Prod ingest (step 5 against `$DATABASE_URL`) can happen before or after this
+step; the allowlist write does not need a code deploy.
+
+### 7. Set `CHAMPIONS_REGULATION`
 
 In `web/src/data/formats.ts`, set `CHAMPIONS_REGULATION` to the new regulation
 string (chip + prompts). Flip this **only** after steps 3–5 pass.
 
-### 7. Grep the old regulation in tests and prompts
+### 8. Grep the old regulation in tests and prompts
 
 ```bash
 cd web
@@ -133,7 +158,7 @@ Replace the previous regulation string (example above is M-C → M-D). Update
 hardcoded pin-test ids/abilities. Do not leave chip, prompts, and pin
 disagreeing.
 
-### 8. Merge to `develop`
+### 9. Merge to `develop`
 
 Merge the worktree branch into `develop`. **Deploy is a separate human step**
 (`cd web && fly deploy` after prod ingest). This runbook does not deploy.
