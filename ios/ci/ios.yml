@@ -17,6 +17,8 @@ on:
       - "ios/**"
 
 jobs:
+  # Keep this iPhone unit-test job. P10 adds an iPad unit job below; do not
+  # fold iPhone away into an iPad-only matrix (P-SUCCESS-2, iPhone freeze).
   build-test:
     name: Build & unit test (iPhone 16 simulator)
     runs-on: macos-15
@@ -38,5 +40,77 @@ jobs:
           xcodebuild test \
             -scheme OakApp \
             -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -only-testing:OakAppTests \
+            CODE_SIGNING_ALLOWED=NO
+
+  # P10 store/CI readiness: run the same OakAppTests suite on an iPad
+  # simulator. Local device is often `iPad Pro 13-inch (M5)`. GitHub
+  # `macos-15` images typically ship Xcode 16 runtimes (`iPad Pro 13-inch
+  # (M4)` or `iPad Air 13-inch`) — not always M5. Prefer a 13-inch Pro,
+  # then Air 13-inch, then any available iPad.
+  build-test-ipad:
+    name: Build & unit test (iPad simulator)
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build & run unit tests
+        run: |
+          NAME="$(python3 - <<'PY'
+          import json, subprocess, sys
+          data = json.loads(
+              subprocess.check_output(
+                  ["xcrun", "simctl", "list", "devices", "available", "-j"]
+              )
+          )
+          available = []
+          for devices in data.get("devices", {}).values():
+              for device in devices:
+                  if device.get("isAvailable") and "iPad" in device.get("name", ""):
+                      available.append(device["name"])
+          preferred = [
+              "iPad Pro 13-inch (M4)",
+              "iPad Pro 13-inch (M5)",
+              "iPad Air 13-inch (M4)",
+              "iPad Air 13-inch (M3)",
+              "iPad Air 13-inch (M2)",
+              "iPad Pro 11-inch (M4)",
+              "iPad Pro 11-inch (M5)",
+              "iPad Air 11-inch (M3)",
+              "iPad Air 11-inch (M2)",
+          ]
+          for name in preferred:
+              if name in available:
+                  print(name)
+                  sys.exit(0)
+          for name in available:
+              if "13-inch" in name:
+                  print(name)
+                  sys.exit(0)
+          if available:
+              print(available[0])
+              sys.exit(0)
+          sys.exit(1)
+          PY
+          )"
+          if [ -z "$NAME" ]; then
+            echo "No iPad simulator available on this image:"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Using iPad destination: $NAME"
+          xcodebuild test \
+            -scheme OakApp \
+            -destination "platform=iOS Simulator,name=$NAME" \
             -only-testing:OakAppTests \
             CODE_SIGNING_ALLOWED=NO

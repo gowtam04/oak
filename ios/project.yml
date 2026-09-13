@@ -30,8 +30,8 @@ settings:
     # complete checking explicitly documents the intent (M-CON-1, conventions.md).
     SWIFT_STRICT_CONCURRENCY: complete
     IPHONEOS_DEPLOYMENT_TARGET: "18.0"
-    # iPhone only, v1 (M-CON-2).
-    TARGETED_DEVICE_FAMILY: "1"
+    # iPhone + iPad (ADR-P6, P-CON-1, P-NFR-9).
+    TARGETED_DEVICE_FAMILY: "1,2"
     ENABLE_USER_SCRIPT_SANDBOXING: "NO"
     MARKETING_VERSION: "1.2"
     CURRENT_PROJECT_VERSION: "61"
@@ -70,12 +70,11 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: "YES"
         SUPPORTS_MACCATALYST: "NO"
-        # iPhone only (M-CON-2). MUST be set on the TARGET: XcodeGen's application
-        # settingPreset injects TARGETED_DEVICE_FAMILY="1,2" (iPhone+iPad) at the
-        # target level, which overrides the project-level base "1" — so without
-        # this the binary ships as iPhone+iPad and App Store Connect demands iPad
-        # screenshots.
-        TARGETED_DEVICE_FAMILY: "1"
+        # iPhone + iPad (ADR-P6). MUST be set on the TARGET: XcodeGen's application
+        # settingPreset injects TARGETED_DEVICE_FAMILY="1,2" at the target level,
+        # which overrides project-level base. Set "1,2" explicitly so the binary
+        # is iPhone+iPad (P-CON-1). Mac Catalyst stays off (P-OOS-3).
+        TARGETED_DEVICE_FAMILY: "1,2"
 
   OakAppTests:
     type: bundle.unit-test

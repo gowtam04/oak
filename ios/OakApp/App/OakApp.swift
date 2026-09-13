@@ -1,11 +1,13 @@
 import SwiftUI
+import UIKit
 
 /// Application entry point.
 ///
 /// Constructs the shared `AppState`, soft-update view model, and the
-/// `ServiceContainer`, injects them into the environment, and shows `RootView`
-/// (the four-tab shell). The app holds no LLM keys and no database — it talks
-/// only to the Oak backend over HTTP/SSE (plus App Store Lookup for soft-update).
+/// `ServiceContainer`, injects them into the environment, and shows
+/// `PadRootView` on iPad idiom or `RootView` otherwise (ADR-P1). The app holds
+/// no LLM keys and no database — it talks only to the Oak backend over HTTP/SSE
+/// (plus App Store Lookup for soft-update).
 @main
 struct OakApp: App {
   @State private var appState = AppState(
@@ -46,11 +48,21 @@ struct OakApp: App {
   }
 
   private var rootView: some View {
-    RootView()
+    idiomRoot
       .environment(appState)
       .environment(updateModel)
       .oakServices(services)
       // `nil` (System) follows the iPhone setting; Light/Dark override it.
       .preferredColorScheme(appState.appearance.colorScheme)
+  }
+
+  /// Idiom, not size class: compact iPad still uses `PadRootView` (P-SHELL-BR-4).
+  @ViewBuilder
+  private var idiomRoot: some View {
+    if UIDevice.current.userInterfaceIdiom == .pad {
+      PadRootView()
+    } else {
+      RootView()
+    }
   }
 }

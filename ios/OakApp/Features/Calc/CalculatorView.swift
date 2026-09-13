@@ -1,6 +1,8 @@
 import SwiftUI
 
 /// Shared calculator form — overlay sheet and first-class screen (CALC-US-1/2).
+/// iPhone keeps this stacked ScrollView. iPad `PadCalcWorkspace` composes the
+/// extracted editors in attacker | defender | visible-result panes.
 struct CalculatorView: View {
   @Bindable var model: CalculatorViewModel
   var onExplain: ((String) -> Void)?
@@ -11,16 +13,16 @@ struct CalculatorView: View {
     NavigationStack {
       ScrollView {
         VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
-          sideEditor(title: "Attacker", side: attackerBinding)
-          sideEditor(title: "Defender", side: defenderBinding)
-          moveEditor
-          fieldEditor
+          CalcSideEditor(title: "Attacker", side: attackerBinding, model: model)
+          CalcSideEditor(title: "Defender", side: defenderBinding, model: model)
+          CalcMoveEditor(model: model)
+          CalcFieldEditor(model: model)
           if model.investmentIsStatPoints {
-            statPointsEditor(title: "Attacker", side: attackerBinding)
-            statPointsEditor(title: "Defender", side: defenderBinding)
+            CalcStatPointsEditor(title: "Attacker", side: attackerBinding)
+            CalcStatPointsEditor(title: "Defender", side: defenderBinding)
           }
-          resultBlock
-          actions
+          CalcResultBlock(model: model)
+          CalcExplainActions(model: model, onExplain: onExplain, onExpand: onExpand)
         }
         .padding(Theme.Spacing.lg)
       }
@@ -43,7 +45,7 @@ struct CalculatorView: View {
           .oakLidItem()
         }
       }
-      .task(id: estimateKey) {
+      .task(id: calcEstimateKey(model)) {
         await model.recompute()
       }
     }
@@ -57,45 +59,65 @@ struct CalculatorView: View {
   private var defenderBinding: Binding<CalcSide> {
     Binding(get: { model.scenario.defender }, set: { model.scenario.defender = $0 })
   }
+}
 
-  private var estimateKey: String {
-    let a = model.scenario.attacker
-    let d = model.scenario.defender
-    let field = model.scenario.field
-    return [
-      model.scenario.format.rawValue,
-      a.species ?? "", a.item ?? "", a.ability ?? "", a.nature ?? "", a.tera ?? "",
-      a.level.map(String.init) ?? "",
-      evKey(a.evs),
-      d.species ?? "", d.item ?? "", d.ability ?? "", d.nature ?? "", d.tera ?? "",
-      d.level.map(String.init) ?? "",
-      evKey(d.evs),
-      model.scenario.move.slug ?? "", model.scenario.move.name ?? "",
-      field?.weather?.rawValue ?? "",
-      field?.reflect == true ? "R" : "",
-      field?.lightScreen == true ? "LS" : "",
-    ].joined(separator: "|")
-  }
+// MARK: - Shared editors (iPhone stacked + iPad workspace)
 
-  @ViewBuilder
-  private func sideEditor(title: String, side: Binding<CalcSide>) -> some View {
+@MainActor
+func calcEstimateKey(_ model: CalculatorViewModel) -> String {
+  let a = model.scenario.attacker
+  let d = model.scenario.defender
+  let field = model.scenario.field
+  return [
+    model.scenario.format.rawValue,
+    a.species ?? "", a.item ?? "", a.ability ?? "", a.nature ?? "", a.tera ?? "",
+    a.level.map(String.init) ?? "",
+    calcEvKey(a.evs),
+    d.species ?? "", d.item ?? "", d.ability ?? "", d.nature ?? "", d.tera ?? "",
+    d.level.map(String.init) ?? "",
+    calcEvKey(d.evs),
+    model.scenario.move.slug ?? "", model.scenario.move.name ?? "",
+    field?.weather?.rawValue ?? "",
+    field?.reflect == true ? "R" : "",
+    field?.lightScreen == true ? "LS" : "",
+  ].joined(separator: "|")
+}
+
+func calcEvKey(_ evs: [String: Int]?) -> String {
+  guard let evs else { return "" }
+  return evs.keys.sorted().map { "\($0)=\(evs[$0] ?? 0)" }.joined(separator: ",")
+}
+
+func calcOptionalString(_ source: Binding<String?>) -> Binding<String> {
+  Binding(
+    get: { source.wrappedValue ?? "" },
+    set: { source.wrappedValue = $0.isEmpty ? nil : $0 }
+  )
+}
+
+struct CalcSideEditor: View {
+  let title: String
+  @Binding var side: CalcSide
+  var model: CalculatorViewModel
+
+  var body: some View {
     VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
       Text(title)
         .font(Theme.display(.subheadline))
-      TextField("Species", text: optionalString(side.species))
+      TextField("Species", text: calcOptionalString($side.species))
         .textInputAutocapitalization(.never)
         .font(Theme.body(.body))
-      TextField("Item", text: optionalString(side.item))
+      TextField("Item", text: calcOptionalString($side.item))
         .textInputAutocapitalization(.never)
         .font(Theme.body(.body))
-      TextField("Ability", text: optionalString(side.ability))
+      TextField("Ability", text: calcOptionalString($side.ability))
         .textInputAutocapitalization(.never)
         .font(Theme.body(.body))
-      TextField("Nature", text: optionalString(side.nature))
+      TextField("Nature", text: calcOptionalString($side.nature))
         .textInputAutocapitalization(.never)
         .font(Theme.body(.body))
       if model.showsTeraField {
-        TextField("Tera", text: optionalString(side.tera))
+        TextField("Tera", text: calcOptionalString($side.tera))
           .textInputAutocapitalization(.never)
           .font(Theme.body(.body))
       }
@@ -103,8 +125,8 @@ struct CalculatorView: View {
         TextField(
           "Level",
           text: Binding(
-            get: { side.wrappedValue.level.map(String.init) ?? "" },
-            set: { side.wrappedValue.level = Int($0) }
+            get: { side.level.map(String.init) ?? "" },
+            set: { side.level = Int($0) }
           )
         )
         .keyboardType(.numberPad)
@@ -118,8 +140,12 @@ struct CalculatorView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .oakCard(radius: Theme.Radius.md)
   }
+}
 
-  private var moveEditor: some View {
+struct CalcMoveEditor: View {
+  @Bindable var model: CalculatorViewModel
+
+  var body: some View {
     VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
       Text("Move")
         .font(Theme.display(.subheadline))
@@ -137,8 +163,12 @@ struct CalculatorView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .oakCard(radius: Theme.Radius.md)
   }
+}
 
-  private var fieldEditor: some View {
+struct CalcFieldEditor: View {
+  @Bindable var model: CalculatorViewModel
+
+  var body: some View {
     VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
       Text("Field")
         .font(Theme.display(.subheadline))
@@ -186,10 +216,16 @@ struct CalculatorView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .oakCard(radius: Theme.Radius.md)
   }
+}
 
-  private func statPointsEditor(title: String, side: Binding<CalcSide>) -> some View {
-    let keys = ["hp", "atk", "def", "spa", "spd", "spe"]
-    return VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+struct CalcStatPointsEditor: View {
+  let title: String
+  @Binding var side: CalcSide
+
+  private let keys = ["hp", "atk", "def", "spa", "spd", "spe"]
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
       Text("\(title) Stat Points")
         .font(Theme.display(.subheadline))
       ForEach(keys, id: \.self) { key in
@@ -202,17 +238,17 @@ struct CalculatorView: View {
             "0",
             text: Binding(
               get: {
-                guard let value = side.wrappedValue.evs?[key] else { return "" }
+                guard let value = side.evs?[key] else { return "" }
                 return String(value)
               },
               set: { raw in
-                var evs = side.wrappedValue.evs ?? [:]
+                var evs = side.evs ?? [:]
                 if let value = Int(raw), value >= 0 {
                   evs[key] = min(value, 32)
                 } else if raw.isEmpty {
                   evs[key] = nil
                 }
-                side.wrappedValue.evs = evs.isEmpty ? nil : evs
+                side.evs = evs.isEmpty ? nil : evs
               }
             )
           )
@@ -226,9 +262,12 @@ struct CalculatorView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .oakCard(radius: Theme.Radius.md)
   }
+}
 
-  @ViewBuilder
-  private var resultBlock: some View {
+struct CalcResultBlock: View {
+  var model: CalculatorViewModel
+
+  var body: some View {
     VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
       Text("Estimate")
         .font(Theme.display(.subheadline))
@@ -269,8 +308,14 @@ struct CalculatorView: View {
     .oakCard(radius: Theme.Radius.md, tint: Theme.sunflower)
     .accessibilityElement(children: .combine)
   }
+}
 
-  private var actions: some View {
+struct CalcExplainActions: View {
+  var model: CalculatorViewModel
+  var onExplain: ((String) -> Void)?
+  var onExpand: (() -> Void)?
+
+  var body: some View {
     VStack(spacing: Theme.Spacing.sm) {
       if let prompt = model.explainPrompt() {
         Button("Explain this calc") {
@@ -286,17 +331,5 @@ struct CalculatorView: View {
         .buttonStyle(.oakSecondary)
       }
     }
-  }
-
-  private func evKey(_ evs: [String: Int]?) -> String {
-    guard let evs else { return "" }
-    return evs.keys.sorted().map { "\($0)=\(evs[$0] ?? 0)" }.joined(separator: ",")
-  }
-
-  private func optionalString(_ source: Binding<String?>) -> Binding<String> {
-    Binding(
-      get: { source.wrappedValue ?? "" },
-      set: { source.wrappedValue = $0.isEmpty ? nil : $0 }
-    )
   }
 }

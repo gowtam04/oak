@@ -5,6 +5,7 @@ import SwiftUI
 /// "Thought for N seconds") above the plate.
 struct IncomingAnswerPlate: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.answerCanvas) private var canvas
 
   let phase: ChatViewModel.StreamingPhase
   let activities: [ChatViewModel.ToolActivity]
@@ -29,6 +30,7 @@ struct IncomingAnswerPlate: View {
         MarkdownBlockView(streamingText)
           .font(Theme.body(.body))
           .foregroundStyle(Theme.textPrimary)
+          .frame(maxWidth: canvas.proseMaxWidth ?? .infinity, alignment: .leading)
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(Theme.Spacing.lg)
           .background(Theme.surface, in: plateShape)
