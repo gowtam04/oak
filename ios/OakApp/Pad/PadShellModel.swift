@@ -11,6 +11,13 @@ final class PadShellModel {
   var companionFraction: CGFloat = PadLayout.companionDefaultFraction
   var stackedWorkspaceFraction: CGFloat = 0.62
   var sidebarOverlayPresented: Bool = false
+  /// User hide of the persistent enamel sidebar (P-SHELL-US-8). Compact still
+  /// uses the overlay; this flag is remembered across destination switches
+  /// and rotate, then reset on cold launch (ADR-P7).
+  var sidebarCollapsed: Bool = false
+  /// User hide of the persistent Chat list (P-CHAT-AC-1.8). Width-forced
+  /// overlay (compact / medium + inspector) stays a separate path.
+  var chatListCollapsed: Bool = false
   /// Teams / Dex / Usage / Calc companion send context. Nil on Chat, after
   /// dismiss, and after companion close (P-SHELL-AC-3.3–3.4, ADR-P7).
   var contextChip: PadContextChip? = nil
@@ -61,6 +68,26 @@ final class PadShellModel {
   func hideCompanion() {
     companionOpen = false
     contextChip = nil
+  }
+
+  /// Regular/medium persistent sidebar off. Compact overlay is unchanged.
+  func collapseSidebar() {
+    sidebarCollapsed = true
+    sidebarOverlayPresented = false
+  }
+
+  /// Restore the persistent sidebar (expanded on regular, rail on medium).
+  func expandSidebar() {
+    sidebarCollapsed = false
+    sidebarOverlayPresented = false
+  }
+
+  func collapseChatList() {
+    chatListCollapsed = true
+  }
+
+  func expandChatList() {
+    chatListCollapsed = false
   }
 
   /// Teams / Dex / Usage / Calc only. No-op on Chat (and Settings).

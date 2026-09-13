@@ -40,6 +40,7 @@ enum PadLayout {
   static let mediumMinWidth: CGFloat = 700
   static let sidebarWidth: CGFloat = 220
   static let sidebarRailWidth: CGFloat = 72
+  static let overlayControlInset: CGFloat = 56
   static let chatListMinWidth: CGFloat = 260
   static let inspectorMinWidth: CGFloat = 320
   static let companionMinWidth: CGFloat = 320
@@ -57,6 +58,12 @@ enum PadLayout {
 minus nothing but safe area). Do **not** use `horizontalSizeClass` to
 choose `PadRootView` vs `RootView`. Idiom chooses the root; width
 chooses the mode inside `PadRootView`.
+
+**User-collapsed columns (P-SHELL-US-8, P-CHAT-AC-1.8):** independent of
+the width table. Regular/medium restore a **persistent** column (sidebar
+expanded / rail; Chat list 260). Compact still overlays. `showsListColumn`
+stays the width/inspector policy; `showsPersistentList` ANDs
+`userCollapsed`. Destination switches do not reset the flags.
 
 **Chat pane policy (P-SHELL-AC-5.4):**
 
@@ -89,6 +96,8 @@ final class PadShellModel {
   var companionFraction: CGFloat = PadLayout.companionDefaultFraction
   var stackedWorkspaceFraction: CGFloat = 0.62
   var sidebarOverlayPresented: Bool = false
+  var sidebarCollapsed: Bool = false      // P-SHELL-US-8; session-only
+  var chatListCollapsed: Bool = false     // P-CHAT-AC-1.8; session-only
   var contextChip: PadContextChip? = nil
   private(set) var previousDestination: PadDestination = .chat
 
@@ -98,6 +107,10 @@ final class PadShellModel {
   func closeCalc()
   func revealCompanion()
   func hideCompanion()
+  func collapseSidebar()
+  func expandSidebar()
+  func collapseChatList()
+  func expandChatList()
   /// Teams / Dex / Usage / Calc only. No-op on Chat.
   func setContextChip(_ chip: PadContextChip?)
   func dismissCenteredPanels() // destination switch

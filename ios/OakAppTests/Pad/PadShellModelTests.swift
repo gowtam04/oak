@@ -15,6 +15,9 @@ import Testing
 ///   `previousDestination` default `.chat` (`private(set)`)
 ///   `select(_:)`, `openCalc(scenario:)`, `closeCalc()`,
 ///   `revealCompanion()`, `hideCompanion()`, `dismissCenteredPanels()`
+///   `sidebarCollapsed` / `chatListCollapsed` default false (P-SHELL-US-8,
+///   P-CHAT-AC-1.8); `collapseSidebar`/`expandSidebar`/`collapseChatList`/
+///   `expandChatList`; destination switch does not reset them (ADR-P7)
 ///   `setContextChip(_:)` — Teams / Dex / Usage / Calc only; no-op on Chat
 ///   `var contextChip: PadContextChip? = nil`
 ///   Test hook: `var centeredPanelPresented = false` — `dismissCenteredPanels()`
@@ -54,6 +57,8 @@ struct PadShellModelTests {
     #expect(shell.previousDestination == .chat)
     #expect(shell.stackedWorkspaceFraction == 0.62)
     #expect(shell.sidebarOverlayPresented == false)
+    #expect(shell.sidebarCollapsed == false)
+    #expect(shell.chatListCollapsed == false)
     #expect(shell.centeredPanelPresented == false)
     #expect(shell.contextChip == nil)
   }
@@ -354,6 +359,45 @@ struct PadShellModelTests {
     #expect(shell.centeredPanelPresented == false)
     #expect(shell.companionOpen == true)
     #expect(shell.contextChip == chip)
+  }
+
+  // MARK: User-collapsed chrome (P-SHELL-US-8, P-CHAT-AC-1.8, ADR-P7)
+
+  @Test
+  func collapseAndExpandSidebarToggleFlagAndDismissOverlay() {
+    let shell = makeShell()
+    shell.sidebarOverlayPresented = true
+    shell.collapseSidebar()
+    #expect(shell.sidebarCollapsed == true)
+    #expect(shell.sidebarOverlayPresented == false)
+    shell.expandSidebar()
+    #expect(shell.sidebarCollapsed == false)
+    #expect(shell.sidebarOverlayPresented == false)
+  }
+
+  @Test
+  func collapseAndExpandChatListToggleFlag() {
+    let shell = makeShell()
+    shell.collapseChatList()
+    #expect(shell.chatListCollapsed == true)
+    shell.expandChatList()
+    #expect(shell.chatListCollapsed == false)
+  }
+
+  @Test
+  func destinationSwitchDoesNotResetColumnCollapse() {
+    let shell = makeShell()
+    shell.collapseSidebar()
+    shell.collapseChatList()
+    shell.select(.teams())
+    #expect(shell.sidebarCollapsed == true)
+    #expect(shell.chatListCollapsed == true)
+    shell.select(.dex())
+    #expect(shell.sidebarCollapsed == true)
+    #expect(shell.chatListCollapsed == true)
+    shell.select(.chat)
+    #expect(shell.sidebarCollapsed == true)
+    #expect(shell.chatListCollapsed == true)
   }
 
   @Test

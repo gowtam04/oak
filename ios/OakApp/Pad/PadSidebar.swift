@@ -13,6 +13,8 @@ struct PadSidebar: View {
   var style: Style
   var selected: OakAppTab?
   var onSelect: (OakAppTab) -> Void
+  /// Persistent sidebar only (P-SHELL-US-8). Overlay omits this.
+  var onCollapse: (() -> Void)? = nil
 
   var body: some View {
     VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
@@ -35,13 +37,40 @@ struct PadSidebar: View {
   private var header: some View {
     switch style {
     case .expanded:
-      OakWordmarkLockup(tileSize: 32, titleStyle: .headline, elevated: true)
-        .padding(.horizontal, Theme.Spacing.sm)
-        .padding(.bottom, Theme.Spacing.md)
+      HStack(alignment: .center, spacing: Theme.Spacing.sm) {
+        OakWordmarkLockup(tileSize: 32, titleStyle: .headline, elevated: true)
+        Spacer(minLength: 0)
+        collapseButton
+      }
+      .padding(.horizontal, Theme.Spacing.sm)
+      .padding(.bottom, Theme.Spacing.md)
     case .rail:
-      OakBrandMark(size: 28)
-        .frame(maxWidth: .infinity)
-        .padding(.bottom, Theme.Spacing.md)
+      VStack(spacing: Theme.Spacing.xs) {
+        OakBrandMark(size: 28)
+          .frame(maxWidth: .infinity)
+        collapseButton
+      }
+      .padding(.bottom, Theme.Spacing.md)
+    }
+  }
+
+  @ViewBuilder
+  private var collapseButton: some View {
+    if let onCollapse {
+      Button {
+        Haptics.tap()
+        onCollapse()
+      } label: {
+        Image(systemName: "sidebar.leading")
+          .font(.system(size: 18, weight: .semibold))
+          .foregroundStyle(Theme.onRed)
+          .frame(width: 44, height: 44)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .hoverEffect(.highlight)
+      .accessibilityLabel("Collapse destinations")
+      .accessibilityIdentifier("pad-sidebar-collapse")
     }
   }
 

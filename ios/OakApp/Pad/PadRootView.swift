@@ -65,6 +65,7 @@ struct PadRootView: View {
       .environment(\.showsAddToTeam, isSignedIn)
       .environment(\.padPresentAddToTeam, addToTeamPresenter)
       .animation(reduceMotion ? nil : Theme.Motion.snappy, value: shell.sidebarOverlayPresented)
+      .animation(reduceMotion ? nil : Theme.Motion.snappy, value: shell.sidebarCollapsed)
       .animation(reduceMotion ? nil : Theme.Motion.snappy, value: shell.companionOpen)
       .onAppear { ensureChatModel() }
       .task {
@@ -146,23 +147,31 @@ struct PadRootView: View {
 
   @ViewBuilder
   private func persistentSidebar(mode: PadLayoutMode) -> some View {
-    switch mode {
-    case .regular:
-      PadSidebar(
-        style: .expanded,
-        selected: shell.destination.sidebarTab,
-        onSelect: selectTab
-      )
-      .frame(width: PadLayout.sidebarWidth)
-    case .medium:
-      PadSidebar(
-        style: .rail,
-        selected: shell.destination.sidebarTab,
-        onSelect: selectTab
-      )
-      .frame(width: PadLayout.sidebarRailWidth)
-    case .compact:
+    if shell.sidebarCollapsed {
       EmptyView()
+    } else {
+      switch mode {
+      case .regular:
+        PadSidebar(
+          style: .expanded,
+          selected: shell.destination.sidebarTab,
+          onSelect: selectTab,
+          onCollapse: { shell.collapseSidebar() }
+        )
+        .frame(width: PadLayout.sidebarWidth)
+        .transition(.move(edge: .leading))
+      case .medium:
+        PadSidebar(
+          style: .rail,
+          selected: shell.destination.sidebarTab,
+          onSelect: selectTab,
+          onCollapse: { shell.collapseSidebar() }
+        )
+        .frame(width: PadLayout.sidebarRailWidth)
+        .transition(.move(edge: .leading))
+      case .compact:
+        EmptyView()
+      }
     }
   }
 
@@ -188,8 +197,8 @@ struct PadRootView: View {
       }
     }
     .overlay(alignment: .topLeading) {
-      if mode == .compact && !shell.sidebarOverlayPresented {
-        compactSidebarButton
+      if showsDestinationsReveal(mode: mode) && !shell.sidebarOverlayPresented {
+        destinationsRevealButton(mode: mode)
       }
     }
     .overlay(alignment: .topTrailing) {
@@ -199,9 +208,19 @@ struct PadRootView: View {
     }
   }
 
-  private var compactSidebarButton: some View {
+  private func showsDestinationsReveal(mode: PadLayoutMode) -> Bool {
+    mode == .compact || shell.sidebarCollapsed
+  }
+
+  /// Compact: overlay. Regular/medium with the sidebar user-collapsed:
+  /// restore the persistent column (P-SHELL-AC-8.2).
+  private func destinationsRevealButton(mode: PadLayoutMode) -> some View {
     Button {
-      shell.sidebarOverlayPresented = true
+      if mode == .compact {
+        shell.sidebarOverlayPresented = true
+      } else {
+        shell.expandSidebar()
+      }
     } label: {
       Image(systemName: "sidebar.leading")
         .font(.system(size: 20, weight: .semibold))
@@ -212,6 +231,7 @@ struct PadRootView: View {
     .buttonStyle(.plain)
     .padding(Theme.Spacing.sm)
     .accessibilityLabel("Destinations")
+    .accessibilityIdentifier("pad-sidebar-reveal")
   }
 
   private var overlaySidebar: some View {

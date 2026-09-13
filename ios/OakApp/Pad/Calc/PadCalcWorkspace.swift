@@ -41,6 +41,7 @@ struct PadCalcWorkspace: View {
   var body: some View {
     let _ = shell.destination
     let _ = shell.companionOpen
+    let _ = shell.sidebarCollapsed
     let _ = model?.scenario
     let _ = model?.result
     applyLifecycle(to: root)
@@ -120,7 +121,9 @@ struct PadCalcWorkspace: View {
   }
 
   private var headerLeadingInset: CGFloat {
-    layoutMode == .compact ? PadCalcChrome.overlayControlInset : Theme.Spacing.lg
+    (layoutMode == .compact || shell.sidebarCollapsed)
+      ? PadCalcChrome.overlayControlInset
+      : Theme.Spacing.lg
   }
 
   private var headerTrailingInset: CGFloat {

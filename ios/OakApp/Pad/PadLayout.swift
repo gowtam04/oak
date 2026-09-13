@@ -16,6 +16,10 @@ enum PadLayout {
   static let mediumMinWidth: CGFloat = 700
   static let sidebarWidth: CGFloat = 220
   static let sidebarRailWidth: CGFloat = 72
+  /// Destinations reveal control is 44pt + `Theme.Spacing.sm` (8) — Chat,
+  /// Dex, Teams, Usage, Settings, and Calc all leave this leading inset
+  /// when that overlay sits on the pane.
+  static let overlayControlInset: CGFloat = 56
   static let chatListMinWidth: CGFloat = 260
   static let inspectorMinWidth: CGFloat = 320
   static let companionMinWidth: CGFloat = 320

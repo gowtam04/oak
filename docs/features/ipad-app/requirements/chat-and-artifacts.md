@@ -44,6 +44,13 @@ Follow `P-SHELL-AC-5.4`:
   list is a leading overlay or back-to-list, not a permanent skinny
   column. If the inspector is open, it **stacks under the thread**; the
   thread keeps the larger share.
+- **P-CHAT-AC-1.8** — Given a wide Chat destination with a persistent
+  list, when I collapse conversations, then the list column is gone,
+  the thread (and inspector if open) grow, and a Conversations control
+  restores the persistent list. Compact / medium+inspector still use
+  the existing overlay (`P-CHAT-AC-1.6–1.7`). Collapse is opt-in and
+  independent of the enamel sidebar (`P-SHELL-US-8`). Session-only
+  (`ADR-P7`): cold launch shows the list again.
 
 ## Answers on the wide thread
 

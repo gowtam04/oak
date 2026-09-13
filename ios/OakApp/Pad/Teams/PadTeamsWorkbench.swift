@@ -29,6 +29,7 @@ struct PadTeamsWorkbench: View {
   var body: some View {
     let _ = shell.destination
     let _ = shell.companionOpen
+    let _ = shell.sidebarCollapsed
     let _ = editor?.members
     let _ = editor?.name
     let _ = editor?.teamId
@@ -264,8 +265,22 @@ struct PadTeamsWorkbench: View {
     }
   }
 
+  private var destinationsRevealShown: Bool {
+    layoutMode == .compact || shell.sidebarCollapsed
+  }
+
+  private var libraryHeaderLeadingInset: CGFloat {
+    destinationsRevealShown ? PadTeamsChrome.overlayControlInset : Theme.Spacing.lg
+  }
+
   private var headerLeadingInset: CGFloat {
-    layoutMode == .compact ? PadTeamsChrome.overlayControlInset : Theme.Spacing.md
+    let libraryVisible = PadTeamsChrome.showsLibraryColumn(
+      mode: layoutMode,
+      isPortrait: isPortrait
+    )
+    return (destinationsRevealShown && !libraryVisible)
+      ? PadTeamsChrome.overlayControlInset
+      : Theme.Spacing.md
   }
 
   private var headerTrailingInset: CGFloat {
@@ -385,7 +400,7 @@ struct PadTeamsWorkbench: View {
         .accessibilityLabel("Add team")
         .accessibilityIdentifier("oak-add-team")
       }
-      .padding(.leading, Theme.Spacing.lg)
+      .padding(.leading, libraryHeaderLeadingInset)
       .padding(.trailing, Theme.Spacing.sm)
       .padding(.top, Theme.Spacing.md)
       .padding(.bottom, Theme.Spacing.xs)

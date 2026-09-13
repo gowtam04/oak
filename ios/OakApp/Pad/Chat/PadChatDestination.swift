@@ -12,6 +12,16 @@ enum PadChatColumns {
     }
   }
 
+  /// Width/inspector policy **and** the user's Chat-list collapse
+  /// (P-CHAT-AC-1.8). Default `userCollapsed: false` keeps P3 call sites.
+  static func showsPersistentList(
+    mode: PadLayoutMode,
+    inspectorOpen: Bool = false,
+    userCollapsed: Bool = false
+  ) -> Bool {
+    !userCollapsed && showsListColumn(mode: mode, inspectorOpen: inspectorOpen)
+  }
+
   static func showsInspector(mode: PadLayoutMode, inspectorOpen: Bool) -> Bool {
     switch mode {
     case .regular, .medium, .compact: inspectorOpen
@@ -104,22 +114,33 @@ struct PadChatDestination: View {
 
   var body: some View {
     let inspectorOpen = artifactModel?.isPresented ?? false
-    let showsList = PadChatColumns.showsListColumn(mode: layoutMode, inspectorOpen: inspectorOpen)
+    let policyShowsList = PadChatColumns.showsListColumn(
+      mode: layoutMode,
+      inspectorOpen: inspectorOpen
+    )
+    let showsPersistentList = PadChatColumns.showsPersistentList(
+      mode: layoutMode,
+      inspectorOpen: inspectorOpen,
+      userCollapsed: shell.chatListCollapsed
+    )
     let showsInspector = PadChatColumns.showsInspector(mode: layoutMode, inspectorOpen: inspectorOpen)
     let stacksInspector = PadChatColumns.stacksInspectorUnderThread(mode: layoutMode)
     GeometryReader { geo in
       ZStack(alignment: .leading) {
         HStack(spacing: 0) {
-          if showsList {
+          if showsPersistentList {
             PadConversationListColumn(
               chatModel: model,
               onNewConversation: startNewConversation,
-              onSignIn: onSignIn
+              onSignIn: onSignIn,
+              onCollapse: { shell.collapseChatList() },
+              headerLeadingInset: listHeaderLeadingInset
             )
             .disabled(isVoicePresented)
             .allowsHitTesting(!isVoicePresented)
             .frame(width: PadLayout.chatListMinWidth)
             .frame(maxHeight: .infinity)
+            .transition(.move(edge: .leading))
             columnSeparator
           }
 
@@ -128,8 +149,14 @@ struct PadChatDestination: View {
               model: model,
               artifactModel: artifactModel,
               signInAction: guestSignInAction,
-              showsListButton: !showsList && !listOverlayPresented,
-              onPresentList: { listOverlayPresented = true },
+              showsListButton: !showsPersistentList && !listOverlayPresented,
+              onPresentList: {
+                if policyShowsList {
+                  shell.expandChatList()
+                } else {
+                  listOverlayPresented = true
+                }
+              },
               onNewConversation: startNewConversation,
               onVoice: onStartVoice,
               isVoicePresented: isVoicePresented
@@ -169,7 +196,7 @@ struct PadChatDestination: View {
           }
         }
 
-        if !showsList, listOverlayPresented {
+        if !policyShowsList, listOverlayPresented {
           compactListOverlay
         }
       }
@@ -204,9 +231,13 @@ struct PadChatDestination: View {
     .onChange(of: isVoicePresented) { _, presented in
       if presented { listOverlayPresented = false }
     }
+    .onChange(of: shell.chatListCollapsed) { _, collapsed in
+      if collapsed { listOverlayPresented = false }
+    }
     .background(Theme.canvas)
     .animation(reduceMotion ? nil : Theme.Motion.snappy, value: listOverlayPresented)
     .animation(reduceMotion ? nil : Theme.Motion.snappy, value: inspectorOpen)
+    .animation(reduceMotion ? nil : Theme.Motion.snappy, value: shell.chatListCollapsed)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("pad-chat-destination")
   }
@@ -221,6 +252,12 @@ struct PadChatDestination: View {
     Rectangle()
       .fill(Theme.separator)
       .frame(height: 1)
+  }
+
+  private var listHeaderLeadingInset: CGFloat {
+    (layoutMode == .compact || shell.sidebarCollapsed)
+      ? PadLayout.overlayControlInset
+      : Theme.Spacing.lg
   }
 
   private var guestSignInAction: (() -> Void)? {
@@ -248,7 +285,8 @@ struct PadChatDestination: View {
           listOverlayPresented = false
           onSignIn()
         },
-        onDidSelect: { listOverlayPresented = false }
+        onDidSelect: { listOverlayPresented = false },
+        headerLeadingInset: listHeaderLeadingInset
       )
       .disabled(isVoicePresented)
       .allowsHitTesting(!isVoicePresented)

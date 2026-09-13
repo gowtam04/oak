@@ -16,7 +16,9 @@ PadShellModel (process, @MainActor, @Observable)
   ├── destination: PadDestination          // chat | teams | usage | dex | settings | calc(scenario)
   ├── companionOpen: Bool                  // default false
   ├── companionFraction: CGFloat           // landscape width share / portrait height share
-  ├── sidebarOverlayPresented: Bool        // compact/medium rail overlay
+  ├── sidebarOverlayPresented: Bool        // compact overlay
+  ├── sidebarCollapsed: Bool               // user hide of persistent enamel
+  ├── chatListCollapsed: Bool              // user hide of persistent Chat list
   ├── contextChip: PadContextChip?         // nil when dismissed or Chat destination
   ├── inspector: ArtifactViewModel?        // Chat destination only
   ├── companionArtifact: ArtifactViewModel?// centered panel outside Chat
@@ -75,13 +77,15 @@ Constants live in `PadLayout` (single source). Do not scatter magic numbers.
 | --- | --- | --- | --- |
 | companionOpen | Bool | `false` | remembered across Teams/Usage/Dex/Calc only |
 | companionFraction | CGFloat | `0.38` | clamp so workspace stays usable (P-SHELL-AC-4.3) |
-| sidebarOverlayPresented | Bool | `false` | compact/medium |
+| sidebarOverlayPresented | Bool | `false` | compact overlay |
+| sidebarCollapsed | Bool | `false` | user hide of persistent enamel (P-SHELL-US-8) |
+| chatListCollapsed | Bool | `false` | user hide of persistent Chat list (P-CHAT-AC-1.8) |
 | previousDestination | PadDestination | `.chat` | Calc Done target |
 
 - **Ownership:** created in `PadRootView`, `@State`, not in `AppState` (keeps iPhone `AppState` free of iPad chrome).
-- **Lifecycle:** process memory (ADR-P7). Rotate/Split View keep it. Cold launch resets companion closed.
+- **Lifecycle:** process memory (ADR-P7). Rotate/Split View keep it. Cold launch resets companion closed and columns expanded.
 - **Permissions:** n/a
-- **Requirement trace:** P-SHELL-BR-3, P-SHELL-AC-5.5, P-OQ-1
+- **Requirement trace:** P-SHELL-BR-3, P-SHELL-AC-5.5, P-SHELL-US-8, P-CHAT-AC-1.8, P-OQ-1
 
 ## Relationships
 

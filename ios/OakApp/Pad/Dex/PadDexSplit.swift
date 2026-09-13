@@ -36,6 +36,7 @@ struct PadDexSplit: View {
   var body: some View {
     let _ = shell.destination
     let _ = shell.companionOpen
+    let _ = shell.sidebarCollapsed
     applyLifecycle(to: root)
   }
 
@@ -141,7 +142,7 @@ struct PadDexSplit: View {
         Spacer(minLength: 0)
         RegulationChip()
       }
-      .padding(.leading, Theme.Spacing.lg)
+      .padding(.leading, indexHeaderLeadingInset)
       .padding(.trailing, Theme.Spacing.sm)
       .padding(.top, Theme.Spacing.md)
       .padding(.bottom, Theme.Spacing.xs)
@@ -350,8 +351,19 @@ struct PadDexSplit: View {
     return displayName(for: route)
   }
 
+  private var destinationsRevealShown: Bool {
+    layoutMode == .compact || shell.sidebarCollapsed
+  }
+
+  private var indexHeaderLeadingInset: CGFloat {
+    destinationsRevealShown ? PadDexChrome.overlayControlInset : Theme.Spacing.lg
+  }
+
   private var headerLeadingInset: CGFloat {
-    layoutMode == .compact ? PadDexChrome.overlayControlInset : Theme.Spacing.md
+    let indexVisible = PadDexChrome.showsIndexColumn(mode: layoutMode, isPortrait: isPortrait)
+    return (destinationsRevealShown && !indexVisible)
+      ? PadDexChrome.overlayControlInset
+      : Theme.Spacing.md
   }
 
   private var headerTrailingInset: CGFloat {

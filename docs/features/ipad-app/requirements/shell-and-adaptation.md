@@ -139,7 +139,8 @@ and a skinny Stage Manager / Split View window.
   - **P-SHELL-AC-5.5** — Resize, rotate, Split View, and Stage Manager
     **do not reset** the open conversation, team, Dex profile, Usage
     species, Calc scenario, inspector back stack, companion
-    open/closed state, or composer draft.
+    open/closed state, user-collapsed sidebar / Chat list, or composer
+    draft.
   - **P-SHELL-AC-5.6** — There is **no dedicated external-display
     layout**. Extra windows the system may create are out of scope to
     design (`operational.md`); a single Oak window always follows these
@@ -205,6 +206,29 @@ it. **No Pencil-specific features** are designed.
   sidebar for guests (see `auth-and-permissions.md`).
 - **P-SHELL-BR-7** — Destination switches dismiss centered panels;
   orientation/size changes do not.
+
+## User-collapsed sidebar
+
+Width-driven rail/overlay (`P-SHELL-AC-5.2`) is automatic. On a wide
+window the user can also **hide** the persistent enamel sidebar to give
+the workspace that width.
+
+- **P-SHELL-US-8** — As any user on a wide iPad, I want to hide the
+  destinations sidebar so the workspace can use that width, and show it
+  again without rotating.
+  - **P-SHELL-AC-8.1** — Default full-screen landscape: the sidebar is
+    still shown (`P-SHELL-AC-1.1`). Collapse is opt-in.
+  - **P-SHELL-AC-8.2** — A control on the sidebar collapses it. A
+    leading Destinations control restores the **persistent** sidebar
+    (expanded on regular width, rail on medium). Compact width still
+    uses the overlay (`P-SHELL-AC-5.2`); user collapse does not invent
+    a second compact mode.
+  - **P-SHELL-AC-8.3** — Collapse does **not** shrink the sidebar to the
+    72pt rail on regular width. The rail remains the automatic
+    medium-width treatment.
+  - **P-SHELL-AC-8.4** — Collapse/expand survives rotate, Split View,
+    and destination switches in-session; cold launch shows the sidebar
+    again (session-only chrome, `ADR-P7`).
 
 ## Cross-links
 

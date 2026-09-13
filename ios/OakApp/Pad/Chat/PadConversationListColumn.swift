@@ -8,6 +8,10 @@ struct PadConversationListColumn: View {
   var onNewConversation: () -> Void
   var onSignIn: () -> Void
   var onDidSelect: (() -> Void)? = nil
+  var onCollapse: (() -> Void)? = nil
+  /// Destinations reveal sits on this column when the enamel sidebar is
+  /// hidden (`PadLayout.overlayControlInset`); otherwise the usual gutter.
+  var headerLeadingInset: CGFloat = Theme.Spacing.lg
 
   @Environment(\.services) private var services
   @Environment(AppState.self) private var appState
@@ -60,21 +64,24 @@ struct PadConversationListColumn: View {
 
   private var guestSignIn: some View {
     VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+      header
       Image(systemName: "icloud")
         .font(.system(size: 22, weight: .medium))
         .foregroundStyle(Theme.textSecondary)
         .accessibilityHidden(true)
+        .padding(.horizontal, Theme.Spacing.lg)
       Text("Sign in to save your conversations")
         .font(Theme.display(.title3))
         .foregroundStyle(Theme.textStrong)
         .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, Theme.Spacing.lg)
       Button("Sign in", action: onSignIn)
         .font(Theme.display(.body, weight: .semibold))
         .buttonStyle(.borderless)
         .tint(Theme.accent)
+        .padding(.horizontal, Theme.Spacing.lg)
       Spacer(minLength: 0)
     }
-    .padding(Theme.Spacing.lg)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .background(Theme.canvas)
   }
@@ -117,6 +124,22 @@ struct PadConversationListColumn: View {
         .foregroundStyle(Theme.textStrong)
         .accessibilityAddTraits(.isHeader)
       Spacer(minLength: 0)
+      if let onCollapse {
+        Button {
+          Haptics.tap()
+          onCollapse()
+        } label: {
+          Image(systemName: "rectangle.split.1x2")
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(Theme.accent)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
+        .accessibilityLabel("Collapse conversations")
+        .accessibilityIdentifier("pad-chat-list-collapse")
+      }
       Button {
         Haptics.tap()
         onNewConversation()
@@ -126,7 +149,8 @@ struct PadConversationListColumn: View {
       }
       .accessibilityLabel("New conversation")
     }
-    .padding(.horizontal, Theme.Spacing.lg)
+    .padding(.leading, headerLeadingInset)
+    .padding(.trailing, Theme.Spacing.lg)
     .padding(.top, Theme.Spacing.md)
     .padding(.bottom, Theme.Spacing.xs)
   }

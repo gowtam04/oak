@@ -52,6 +52,7 @@ struct PadUsageSplit: View {
   var body: some View {
     let _ = shell.destination
     let _ = shell.companionOpen
+    let _ = shell.sidebarCollapsed
     applyLifecycle(to: root)
   }
 
@@ -231,8 +232,12 @@ struct PadUsageSplit: View {
     .accessibilityIdentifier("pad-usage-ladder")
   }
 
+  private var destinationsRevealShown: Bool {
+    layoutMode == .compact || shell.sidebarCollapsed
+  }
+
   private var ladderHeaderLeadingInset: CGFloat {
-    layoutMode == .compact ? PadUsageChrome.overlayControlInset : Theme.Spacing.lg
+    destinationsRevealShown ? PadUsageChrome.overlayControlInset : Theme.Spacing.lg
   }
 
   private func ladderBinding(_ model: UsageViewModel) -> Binding<UsageLadder> {
@@ -355,7 +360,13 @@ struct PadUsageSplit: View {
   }
 
   private var headerLeadingInset: CGFloat {
-    layoutMode == .compact ? PadUsageChrome.overlayControlInset : Theme.Spacing.md
+    let ladderVisible = PadUsageChrome.showsLadderColumn(
+      mode: layoutMode,
+      isPortrait: isPortrait
+    )
+    return (destinationsRevealShown && !ladderVisible)
+      ? PadUsageChrome.overlayControlInset
+      : Theme.Spacing.md
   }
 
   private var headerTrailingInset: CGFloat {

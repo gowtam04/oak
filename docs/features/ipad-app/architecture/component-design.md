@@ -34,7 +34,7 @@ iPad adds a **Pad** view layer. It does not add services.
 
 | Aspect | Detail |
 | --- | --- |
-| Responsibility | Width → mode; enamel sidebar; HStack/VStack columns; overlay rail; split drag |
+| Responsibility | Width → mode; enamel sidebar; user-collapse of sidebar + Chat list; HStack/VStack columns; overlay rail; split drag |
 | Owns | `PadLayout.swift`, `PadColumnStack.swift`, `PadSidebar.swift`, `PadSplitHandle.swift` |
 | Exposes | `PadLayout.mode(for:)`, stack that yields proposed column frames |
 | Depends on | `Theme`, `OakAppTab` titles/icons (read-only) |

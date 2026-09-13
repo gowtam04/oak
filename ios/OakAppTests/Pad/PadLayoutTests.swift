@@ -24,6 +24,8 @@ import Testing
 /// ```
 /// enum PadChatColumns {
 ///   static func showsListColumn(mode: PadLayoutMode, inspectorOpen: Bool = false) -> Bool
+///   static func showsPersistentList(mode:inspectorOpen:userCollapsed:) -> Bool
+///     — userCollapsed default false; ANDs with showsListColumn (P-CHAT-AC-1.8)
 ///   static func showsInspector(mode: PadLayoutMode, inspectorOpen: Bool) -> Bool
 ///   static func stacksInspectorUnderThread(mode: PadLayoutMode) -> Bool // compact true
 ///   static func listShowsSignIn(isSignedIn: Bool) -> Bool // P3; unchanged
@@ -57,6 +59,7 @@ struct PadLayoutTests {
     #expect(PadLayout.mediumMinWidth == 700)
     #expect(PadLayout.sidebarWidth == 220)
     #expect(PadLayout.sidebarRailWidth == 72)
+    #expect(PadLayout.overlayControlInset == 56)
     #expect(PadLayout.chatListMinWidth == 260)
     #expect(PadLayout.inspectorMinWidth == 320)
     #expect(PadLayout.companionMinWidth == 320)
@@ -225,6 +228,65 @@ struct PadLayoutTests {
     #expect(PadChatColumns.stacksInspectorUnderThread(mode: regular) == false)
     #expect(PadChatColumns.stacksInspectorUnderThread(mode: medium) == false)
     #expect(PadChatColumns.stacksInspectorUnderThread(mode: compact) == true)
+  }
+
+  // MARK: User-collapsed Chat list (P-CHAT-AC-1.8)
+  // Width/inspector table is unchanged; userCollapsed only ANDs off the
+  // persistent column. Default false keeps P3 call sites.
+
+  @Test
+  func showsPersistentListDefaultsToNotUserCollapsed() {
+    #expect(
+      PadChatColumns.showsPersistentList(mode: .regular)
+        == PadChatColumns.showsListColumn(mode: .regular)
+    )
+    #expect(
+      PadChatColumns.showsPersistentList(mode: .medium)
+        == PadChatColumns.showsListColumn(mode: .medium)
+    )
+    #expect(
+      PadChatColumns.showsPersistentList(mode: .compact)
+        == PadChatColumns.showsListColumn(mode: .compact)
+    )
+  }
+
+  @Test
+  func userCollapsedHidesPersistentListOnRegularEvenWithInspector() {
+    #expect(
+      PadChatColumns.showsPersistentList(
+        mode: .regular,
+        inspectorOpen: false,
+        userCollapsed: true
+      ) == false
+    )
+    #expect(
+      PadChatColumns.showsPersistentList(
+        mode: .regular,
+        inspectorOpen: true,
+        userCollapsed: true
+      ) == false
+    )
+    #expect(
+      PadChatColumns.showsListColumn(mode: .regular, inspectorOpen: true) == true
+    )
+  }
+
+  @Test
+  func userCollapsedDoesNotOverrideWidthForcedHide() {
+    #expect(
+      PadChatColumns.showsPersistentList(
+        mode: .medium,
+        inspectorOpen: true,
+        userCollapsed: false
+      ) == false
+    )
+    #expect(
+      PadChatColumns.showsPersistentList(
+        mode: .compact,
+        inspectorOpen: false,
+        userCollapsed: false
+      ) == false
+    )
   }
 
   @Test

@@ -94,6 +94,7 @@ struct PadSettingsSplit: View {
 
   var body: some View {
     let _ = shell.destination
+    let _ = shell.sidebarCollapsed
     applyLifecycle(to: root)
   }
 
@@ -216,8 +217,12 @@ struct PadSettingsSplit: View {
     .accessibilityIdentifier("pad-settings-list")
   }
 
+  private var destinationsRevealShown: Bool {
+    layoutMode == .compact || shell.sidebarCollapsed
+  }
+
   private var listHeaderLeadingInset: CGFloat {
-    layoutMode == .compact ? PadSettingsChrome.overlayControlInset : Theme.Spacing.lg
+    destinationsRevealShown ? PadSettingsChrome.overlayControlInset : Theme.Spacing.lg
   }
 
   @ViewBuilder
@@ -322,7 +327,13 @@ struct PadSettingsSplit: View {
   }
 
   private var headerLeadingInset: CGFloat {
-    layoutMode == .compact ? PadSettingsChrome.overlayControlInset : Theme.Spacing.md
+    let listVisible = PadSettingsChrome.showsListColumn(
+      mode: layoutMode,
+      isPortrait: isPortrait
+    )
+    return (destinationsRevealShown && !listVisible)
+      ? PadSettingsChrome.overlayControlInset
+      : Theme.Spacing.md
   }
 
   private var headerTrailingInset: CGFloat {
