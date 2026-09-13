@@ -38,11 +38,18 @@
 		<string>NunitoSans-SemiBold.ttf</string>
 		<string>NunitoSans-Bold.ttf</string>
 	</array>
-	<!-- Portrait-only (iPhone, M-CON-2): a chat/team-builder UI that matches the
-	     portrait App Store screenshots. -->
+	<!-- Portrait-only on iPhone (P-CON-2). iPad lists all four orientations
+	     (ADR-P6 / P-NFR-9). UIRequiresFullScreen stays unset so Split View works. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>

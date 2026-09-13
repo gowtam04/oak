@@ -5,11 +5,21 @@ private struct ShowsAddToTeamKey: EnvironmentKey {
   static let defaultValue = false
 }
 
+private struct PadPresentAddToTeamKey: EnvironmentKey {
+  nonisolated(unsafe) static let defaultValue: (@MainActor (TeamMember) -> Void)? = nil
+}
+
 extension EnvironmentValues {
   /// Signed-in only. Guests never see Add-to-team (AUTH-BR-1).
   var showsAddToTeam: Bool {
     get { self[ShowsAddToTeamKey.self] }
     set { self[ShowsAddToTeamKey.self] = newValue }
+  }
+
+  /// iPad host presents Add-to-team as ``PadCenteredPanel`` instead of a sheet.
+  var padPresentAddToTeam: (@MainActor (TeamMember) -> Void)? {
+    get { self[PadPresentAddToTeamKey.self] }
+    set { self[PadPresentAddToTeamKey.self] = newValue }
   }
 }
 
@@ -62,13 +72,14 @@ private struct AddToTeamButtonInner: View {
   var compact: Bool = false
   @Environment(AppState.self) private var appState
   @Environment(\.services) private var services
+  @Environment(\.padPresentAddToTeam) private var padPresentAddToTeam
   @State private var presented = false
 
   var body: some View {
     Group {
       if compact {
         Button {
-          presented = true
+          present()
         } label: {
           Label("Add to team", systemImage: "plus")
             .font(Theme.body(.caption, weight: .medium))
@@ -77,7 +88,7 @@ private struct AddToTeamButtonInner: View {
         .accessibilityLabel("Add to team")
       } else {
         Button {
-          presented = true
+          present()
         } label: {
           Label("Add to team", systemImage: "plus.square.on.square")
             .font(Theme.display(.footnote))
@@ -100,6 +111,14 @@ private struct AddToTeamButtonInner: View {
         }
       )
       .oakPaperSheet()
+    }
+  }
+
+  private func present() {
+    if let padPresentAddToTeam {
+      padPresentAddToTeam(incoming)
+    } else {
+      presented = true
     }
   }
 }
@@ -238,6 +257,8 @@ final class AddToTeamViewModel {
 struct AddToTeamSheet: View {
   @Bindable var model: AddToTeamViewModel
   var onOpened: ((String, Int) -> Void)?
+  /// Pad hosts nil the ``PadCenteredPanel``; iPhone sheets keep ``dismiss()``.
+  var onCancel: (() -> Void)? = nil
 
   @Environment(\.dismiss) private var dismiss
   @State private var newName = ""
@@ -287,8 +308,7 @@ struct AddToTeamSheet: View {
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
           Button("Cancel") {
-            model.dismiss()
-            dismiss()
+            cancel()
           }
         }
         .oakLidItem()
@@ -313,6 +333,12 @@ struct AddToTeamSheet: View {
       }
     }
     .oakEnamelNav()
+  }
+
+  private func cancel() {
+    model.dismiss()
+    onCancel?()
+    dismiss()
   }
 
   private var replacePresented: Binding<Bool> {

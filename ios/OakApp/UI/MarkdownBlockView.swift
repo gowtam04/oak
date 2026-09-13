@@ -109,6 +109,13 @@ private struct MarkdownListView: View {
 
 // MARK: - Table
 
+private struct MarkdownTableColumnWidthKey: PreferenceKey {
+  static let defaultValue: CGFloat = 0
+  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+    value = nextValue()
+  }
+}
+
 /// A GFM table rendered as a native, horizontally-scrollable grid.
 ///
 /// Matches the web hug-content recipe (`width: fit-content; max-width: 100%`
@@ -125,8 +132,19 @@ private struct MarkdownListView: View {
 /// candidate grids are meant to use the horizontal space.)
 private struct MarkdownTableView: View {
   let table: MarkdownTable
+  @Environment(\.answerCanvas) private var canvas
+  @State private var columnWidth: CGFloat = 0
 
   var body: some View {
+    if canvas.dataUsesFullWidth {
+      expandingTable
+    } else {
+      huggingTable
+    }
+  }
+
+  /// iPhone / unset canvas — hug-content chrome (unchanged).
+  private var huggingTable: some View {
     ScrollView(.horizontal, showsIndicators: true) {
       // fixedSize locks the Grid at its ideal width (sum of column ideal
       // widths). Cells may still expand to fill those columns via
@@ -137,6 +155,27 @@ private struct MarkdownTableView: View {
         .oakCard(radius: Theme.Radius.md)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  /// Pad thread: card fills the column; scroll only when denser than the column.
+  private var expandingTable: some View {
+    ScrollView(.horizontal, showsIndicators: true) {
+      grid
+        .frame(
+          minWidth: columnWidth > 0 ? columnWidth : nil,
+          alignment: .leading
+        )
+        .background(Theme.surface)
+        .oakCard(radius: Theme.Radius.md)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background {
+      GeometryReader { geo in
+        Color.clear.preference(
+          key: MarkdownTableColumnWidthKey.self, value: geo.size.width)
+      }
+    }
+    .onPreferenceChange(MarkdownTableColumnWidthKey.self) { columnWidth = $0 }
   }
 
   private var grid: some View {

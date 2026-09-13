@@ -43,6 +43,7 @@ struct AnswerCardView: View {
   var receiptsExpanded: Bool = false
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.answerCanvas) private var canvas
   @State private var localReceiptsExpanded = false
   @State private var highlighted: CitationHighlightTarget?
 
@@ -340,6 +341,7 @@ struct AnswerCardView: View {
             )
           }
         )
+        .frame(maxWidth: dataMaxWidth, alignment: .leading)
       }
     case .damageCalc:
       if let damageCalc = answer.damageCalc {
@@ -356,6 +358,7 @@ struct AnswerCardView: View {
           .buttonStyle(.oakSecondary)
           .accessibilityHint("Opens this matchup in the calculator")
         }
+        .frame(maxWidth: dataMaxWidth, alignment: .leading)
       }
     case .teams:
       VStack(alignment: .leading, spacing: 10) {
@@ -390,6 +393,7 @@ struct AnswerCardView: View {
           }
         }
       }
+      .frame(maxWidth: dataMaxWidth, alignment: .leading)
     case .suggestions:
       SuggestionsView(
         suggestions: answer.suggestions ?? [],
@@ -412,32 +416,51 @@ struct AnswerCardView: View {
   /// subsequent (or non-paragraph first) blocks in the standard body voice. Only a
   /// leading plain paragraph is promoted; headings, tables, and lists are never
   /// upgraded (design §4.04 "first paragraph lead" judgment call).
+  ///
+  /// When ``AnswerCanvas/proseMaxWidth`` is set, prose (and the lead) caps at that
+  /// width; GFM tables expand with ``dataMaxWidth`` (P-CHAT-AC-2.1–2.2). Unset /
+  /// phone canvas keeps today's full-width stack.
   @ViewBuilder
   private var answerContent: some View {
     let blocks = MarkdownBlocks.parse(highlightedAnswerMarkdown)
-    if case let .paragraph(leadText) = blocks.first {
-      // Lead paragraph → answerLead; remainder (if any) falls back to body.
-      VStack(alignment: .leading, spacing: 8) {
-        MarkdownText(leadText)
-          .font(Theme.answerLead())
-          .foregroundStyle(Theme.textPrimary)
-          .fixedSize(horizontal: false, vertical: true)
-          .frame(maxWidth: .infinity, alignment: .leading)
-        let tail = Array(blocks.dropFirst())
-        if !tail.isEmpty {
-          MarkdownBlockView(blocks: tail)
-            .font(Theme.body(.body))
-            .foregroundStyle(Theme.textPrimary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
+    VStack(alignment: .leading, spacing: 8) {
+      ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
+        answerBlock(block, isLeadParagraph: index == 0)
+          .frame(maxWidth: maxWidth(for: block), alignment: .leading)
       }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  @ViewBuilder
+  private func answerBlock(_ block: MarkdownBlock, isLeadParagraph: Bool) -> some View {
+    if isLeadParagraph, case let .paragraph(leadText) = block {
+      MarkdownText(leadText)
+        .font(Theme.answerLead())
+        .foregroundStyle(Theme.textPrimary)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
     } else {
-      // First block is not a plain paragraph — render everything at body size.
-      MarkdownBlockView(highlightedAnswerMarkdown)
+      MarkdownBlockView(blocks: [block])
         .font(Theme.body(.body))
         .foregroundStyle(Theme.textPrimary)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+  }
+
+  /// Prose cap when the canvas sets one; otherwise the container (iPhone).
+  private var proseMaxWidth: CGFloat {
+    canvas.proseMaxWidth ?? .infinity
+  }
+
+  /// Data blocks fill the column. Phone canvas is also infinity (today's stack).
+  private var dataMaxWidth: CGFloat { .infinity }
+
+  private func maxWidth(for block: MarkdownBlock) -> CGFloat {
+    if case .table = block, canvas.dataUsesFullWidth {
+      return dataMaxWidth
+    }
+    return proseMaxWidth
   }
 
   // MARK: Type chips (unique subjects[].types, plate top)
@@ -660,6 +683,7 @@ private struct ReceiptsFooterView: View {
   @State private var isOpen = false
   @State private var didCopy = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.answerCanvas) private var canvas
 
   private var hasReasoning: Bool {
     !reasoningMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -746,7 +770,10 @@ private struct ReceiptsFooterView: View {
               MarkdownBlockView(reasoningMarkdown)
                 .font(Theme.body(.footnote))
                 .foregroundStyle(Theme.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(
+                  maxWidth: canvas.proseMaxWidth ?? .infinity,
+                  alignment: .leading
+                )
                 .fixedSize(horizontal: false, vertical: true)
             }
           }

@@ -27,10 +27,19 @@ Do not re-upload the old cream HTML set at `generated-screenshots/render.html`
 
 ## Screenshot dimensions
 
+iPhone (existing 1.2 set — keep):
+
 - **1290×2796** — 6.7" (`APP_IPHONE_67`)
 - **1284×2778** — 6.5" (`APP_IPHONE_65`)
 - App preview: **886×1920**, 15–30s, H.264 High 4.0, AAC stereo
-- iPhone only — no iPad set
+
+iPad (required once the binary is iPhone+iPad — `P-SUCCESS-5`):
+
+- **2064×2752** portrait / **2752×2064** landscape — 13" (`APP_IPAD_PRO_3GEN_129`, iPad Pro M4/M5 and iPad Air 13")
+- Alternate accepted: **2048×2732** / **2732×2048** (12.9" class)
+- Landscape is the **primary** iPad set. Include **at least one portrait**.
+- Show the **tablet shell**: enamel sidebar and a split (Chat list|thread or Teams workbench). **Not** letterboxed iPhone frames, **not** the iPhone tab dock with extra margin.
+- Listing copy in `docs/app-store/ios.md` stays Champions coach. Do **not** claim new agent capabilities (same chat, teams, usage, Dex, calc — iPad layout only).
 
 ---
 
@@ -75,3 +84,34 @@ Do not re-upload the old cream HTML set at `generated-screenshots/render.html`
 **Composition and device:** Device centered, same mockup as frames 1–4.
 **Background and color treatment:** Cream canvas `#FBF7F4`. No gold wash.
 **Mood and energy:** Welcoming, low-friction — closing CTA.
+
+---
+
+## iPad screenshot set (13")
+
+Same Enamel & Paper rules as the iPhone frames (lid, canvas, plates, Fredoka / Nunito Sans, display-only `Champions · Reg M-B` chip). **Device:** generic iPad bezel, no tilt. Landscape frames are the store-front; portrait proves the shell is a real tablet layout (`P-SUCCESS-2`), not a scaled phone.
+
+Do not reuse iPhone PNGs in the iPad slot. Do not show `OakTabDock`. Headlines below repeat existing capabilities — they are not new agent features.
+
+### iPad frame 1 of 3 — Landscape primary: Chat list | thread
+
+**Orientation:** landscape **2752×2064**
+**Headline:** "Answers, with the why"
+**Subheadline:** "Champions reasoning, sources, and a clear flag when something is inferred."
+**App screen featured:** iPad Chat destination: leading enamel sidebar (Chat selected), conversation list column, thread column with a Garchomp vs Dragapult Speed answer, Stat Points (not EVs), `Inferred` flag, and the `Champions · Reg M-B` chip. Composer at the bottom of the **thread** column, not a phone-width strip in a void.
+
+### iPad frame 2 of 3 — Landscape: Teams workbench
+
+**Orientation:** landscape **2752×2064**
+**Headline:** "Build a Champions team"
+**Subheadline:** "Species, item, moves, nature, Stat Points — then save it for chat."
+**App screen featured:** iPad Teams workbench split: sidebar (Teams selected), library list, six-slot canvas titled `Reg M-B Doubles`. Show the tablet columns, not the iPhone list-then-editor stack.
+
+### iPad frame 3 of 3 — Portrait: sidebar + split
+
+**Orientation:** portrait **2064×2752**
+**Headline:** "Retry, share, keep going"
+**Subheadline:** "Edit a typo, copy a clean answer, or share a public link."
+**App screen featured:** Portrait iPad shell with the enamel sidebar (or rail) still visible and a **split** on screen — Chat list|thread **or** the Teams workbench. Distinct from the landscape frames; still not an iPhone screenshot with padding.
+
+Optional extra (not required for the first upload): Dex index|profile or Calc attacker|defender|result in landscape, same capability copy as iPhone usage/calc frames. Still no “iPad-only Oak features” in headlines.

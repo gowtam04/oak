@@ -316,7 +316,7 @@ private struct ArtifactViewerModifier: ViewModifier {
 /// fetched **saved** team. Mirrors the proposed/saved team cards' fidelity (full member sets +
 /// warn-but-allow warnings) but as a focused, scrollable artifact. Each filled member's species
 /// is tappable to drill into that Pokémon (M-AC-A3.1).
-private struct TeamArtifactDetail: View {
+struct TeamArtifactDetail: View {
   let team: TeamArtifact
   var onOpenSpecies: (String) -> Void = { _ in }
 

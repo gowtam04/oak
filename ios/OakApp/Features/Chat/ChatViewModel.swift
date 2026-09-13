@@ -56,6 +56,14 @@ final class ChatViewModel {
   /// The composer's text (two-way bound). 0–2000 chars; the server enforces the cap.
   var composerText: String = ""
 
+  /// Extra team ids merged into send's mentionedTeamIds. iPhone leaves empty.
+  var extraMentionedTeamIds: [String] = []
+
+  /// Pure chip mapping for Pad companion send. Applied to a **local copy** of
+  /// composer text; iPhone never sets this. Skipped while editing the last
+  /// user message.
+  var prepareOutgoingSend: ((String) -> (text: String, mentionedTeamIds: [String]?))?
+
   /// Photos staged for the next turn (M-AC-5.1/5.3). Populated by the composer's
   /// camera / photo-library attach UI (P8) through ``attachImages(_:)`` /
   /// ``removeImage(at:)``; encoded to the wire by `ImageEncoder` at send. Counted by
@@ -289,12 +297,18 @@ final class ChatViewModel {
   // MARK: Derived state
 
   /// Whether the composer can send: not already streaming (unless editing, which
-  /// stops first), no dead mentions, and either some text or an attached image.
+  /// stops first), no dead mentions, and either some text, an attached image, or
+  /// (Pad) mapped chip text that is non-empty. Mapping is not committed here.
   var canSend: Bool {
     if isStreaming && !isEditingLast { return false }
     guard deadMentionIds.isEmpty else { return false }
+    if !pendingImages.isEmpty { return true }
     let trimmed = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-    return !trimmed.isEmpty || !pendingImages.isEmpty
+    if !trimmed.isEmpty { return true }
+    if isEditingLast { return false }
+    guard let map = prepareOutgoingSend else { return false }
+    let mapped = map(trimmed).text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return !mapped.isEmpty
   }
 
   var isSignedIn: Bool {
@@ -355,7 +369,7 @@ final class ChatViewModel {
     guard canSend else { return }
     slashHopGeneration += 1
     let hopGeneration = slashHopGeneration
-    let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
+    var text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
 
     // Handled slashes are not a chat turn — skip them while editing the last
     // user message so "/new" in an edited typo still recovery-POSTs.
@@ -372,12 +386,14 @@ final class ChatViewModel {
           cachedRows: cached,
           hopGeneration: hopGeneration
         )
+        extraMentionedTeamIds = []
         composerText = ""
         dexBind = nil
         updateSlashPicker()
         return
       case .calc(let rest):
         let bind = calcBind
+        extraMentionedTeamIds = []
         composerText = ""
         dexBind = nil
         calcBind = nil
@@ -407,6 +423,7 @@ final class ChatViewModel {
         }
         return
       case .help, .bare:
+        extraMentionedTeamIds = []
         composerText = "/"
         slashPickerDismissed = false
         updateSlashPicker()
@@ -416,10 +433,24 @@ final class ChatViewModel {
       }
     }
 
+    var extrasForSend = extraMentionedTeamIds
+    if !isEditingLast, let map = prepareOutgoingSend {
+      let applied = map(text)
+      text = applied.text.trimmingCharacters(in: .whitespacesAndNewlines)
+      extrasForSend = applied.mentionedTeamIds ?? []
+    }
+
     let mentions = resolveMentions(in: text)
-    if !deadMentionIds.isEmpty { return }
+    if !deadMentionIds.isEmpty {
+      extraMentionedTeamIds = []
+      return
+    }
 
     let images = pendingImages
+    if text.isEmpty && images.isEmpty {
+      extraMentionedTeamIds = []
+      return
+    }
     let recovery: ChatRecovery? = isEditingLast ? .edit : nil
 
     if isStreaming, isEditingLast {
@@ -439,12 +470,14 @@ final class ChatViewModel {
     missingImagesNote = nil
     lastMentionedTeam = mentions.first
     turnStartedAt = Date()
+    let mentionedTeamIds = uniqueTeamIds(mentions.map(\.id) + extrasForSend)
+    extraMentionedTeamIds = []
     let request = PendingRequest(
       message: text,
       images: images,
       scopeSeed: outboundScopeSeed,
       recovery: recovery,
-      mentionedTeamIds: mentions.map(\.id)
+      mentionedTeamIds: mentionedTeamIds
     )
     lastRequest = request
     beginStreaming(request)
@@ -1865,6 +1898,17 @@ final class ChatViewModel {
   private func impliedFormat(for answer: OakAnswer) -> Format? {
     _ = answer
     return nil
+  }
+
+  /// First-seen order: parsed `@` ids, then extras not already present.
+  private func uniqueTeamIds(_ ids: [String]) -> [String] {
+    var seen = Set<String>()
+    var result: [String] = []
+    result.reserveCapacity(ids.count)
+    for id in ids where seen.insert(id).inserted {
+      result.append(id)
+    }
+    return result
   }
 
   /// Bind `@Name` tokens: autocomplete taps *or* free-typed names that match a
