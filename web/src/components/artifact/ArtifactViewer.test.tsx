@@ -23,7 +23,11 @@ vi.mock("@/lib/api/artifact-pin-client", () => ({
 }));
 
 import { fetchEntityArtifact } from "@/lib/api/entity-client";
-import { DAMAGE_CALC_GARCHOMP, SUBJECT_GARCHOMP } from "@/components/test-fixtures";
+import {
+  CANDIDATES_TRUNCATED,
+  DAMAGE_CALC_GARCHOMP,
+  SUBJECT_GARCHOMP,
+} from "@/components/test-fixtures";
 
 import { ArtifactViewerProvider } from "./ArtifactViewerProvider";
 import ArtifactViewer from "./ArtifactViewer";
@@ -231,6 +235,24 @@ describe("ArtifactViewer — structured + controls", () => {
     expect(screen.getByTestId("artifact-title")).toHaveTextContent(
       "Damage calculation",
     );
+  });
+
+  it("dispatches a structured candidates list from payload (no fetch)", () => {
+    mount();
+    act(() =>
+      api.openStructured({
+        kind: "candidates",
+        candidates: CANDIDATES_TRUNCATED,
+      }),
+    );
+    expect(fetchEntityArtifact).not.toHaveBeenCalled();
+    expect(screen.getByTestId("candidate-table")).toHaveAttribute(
+      "data-variant",
+      "full",
+    );
+    expect(screen.getByTestId("artifact-title")).toHaveTextContent("Candidates");
+    expect(screen.getByText("Garchomp")).toBeInTheDocument();
+    expect(screen.getByText("Dragonite")).toBeInTheDocument();
   });
 
   it("shows back only after a drill-down, and back returns to the prior artifact", async () => {

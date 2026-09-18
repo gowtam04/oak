@@ -183,6 +183,15 @@ class ArtifactViewModel(
         push(Artifact(title = "Damage calculation", content = ArtifactContent.DamageCalcContent(damageCalc)))
     }
 
+    /** Opens the answer's candidate list from INLINE payload (no fetch). */
+    fun openCandidates(candidates: ai.gowtam.oak.wire.Candidates, onShowAll: (() -> Unit)? = null) {
+        pendingCandidatesShowAll = onShowAll
+        push(Artifact(title = "Candidates", content = ArtifactContent.CandidatesList(candidates)))
+    }
+
+    var pendingCandidatesShowAll: (() -> Unit)? = null
+        private set
+
     // ---- Navigation ----
 
     /** Returns to the previous artifact (M-AC-A3.2). At the root, backing out dismisses the sheet. */
@@ -442,6 +451,9 @@ sealed interface ArtifactContent {
      * (no fetch). Mirrors the web `damage-calc` structured artifact.
      */
     data class DamageCalcContent(val v: DamageCalc) : ArtifactContent
+
+    /** The answer's candidate list — rendered from INLINE `candidates` (no fetch). */
+    data class CandidatesList(val v: ai.gowtam.oak.wire.Candidates) : ArtifactContent
 
     /**
      * An entity that couldn't be shown (`not_found` / `unavailable` / transport) — an

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.TableChart
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,8 +42,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+
+/** Answer-card preview: at most six stacked rows, with Browse opening the rest. */
+object CandidatePreview {
+    const val CAP = 6
+
+    fun rows(rows: List<CandidateRow>): List<CandidateRow> = rows.take(CAP)
+
+    fun browseCount(candidates: Candidates): Int =
+        if (!candidates.truncated || !candidates.hiddenRows.isNullOrEmpty()) {
+            candidates.totalCount
+        } else {
+            candidates.shown.size
+        }
+}
+
+enum class CandidatesTableVariant { Preview, Full }
 
 /**
  * Renders the `candidates` block as a native, horizontally-scrollable table. Columns:
@@ -65,6 +83,8 @@ fun CandidatesTable(
     modifier: Modifier = Modifier,
     onAddToTeam: ((ai.gowtam.oak.wire.TeamMember) -> Unit)? = null,
     highlightedName: String? = null,
+    variant: CandidatesTableVariant = CandidatesTableVariant.Full,
+    onBrowseAll: (() -> Unit)? = null,
 ) {
     val oak = LocalOakColors.current
     var expandedLocally by rememberSaveable { mutableStateOf(false) }
@@ -106,6 +126,93 @@ fun CandidatesTable(
                 Text(text = "· sorted by $it", style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
             }
         }
+        if (variant == CandidatesTableVariant.Preview) {
+            val preview = CandidatePreview.rows(displayedRows)
+            val countLabel = if (candidates.truncated && !expandedLocally) {
+                "Showing ${preview.size} of ${candidates.totalCount}"
+            } else if (preview.size < displayedRows.size) {
+                "Showing ${preview.size} of ${candidates.totalCount}"
+            } else {
+                "${candidates.totalCount} result${if (candidates.totalCount != 1) "s" else ""}"
+            }
+            Text(
+                text = countLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = oak.textMuted,
+                modifier = Modifier.testTag("candidate-table-count"),
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, oak.border, RoundedCornerShape(OakRadius.md)),
+            ) {
+                preview.forEachIndexed { index, row ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenPokemon(row.name) }
+                            .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
+                        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        SpriteImage(url = row.spriteUrl, name = row.name, size = 32.dp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = row.name,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = oak.textStrong,
+                            )
+                            row.dexNumber?.let {
+                                Text(
+                                    text = dexLabel(it),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = oak.textMuted,
+                                    fontFamily = JetBrainsMonoFamily,
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+                                TextButton(onClick = {
+                                    pinnedNames = if (row.name in pinnedNames) pinnedNames - row.name else pinnedNames + row.name
+                                }) {
+                                    Text(if (row.name in pinnedNames) "Unpin" else "Pin", color = oak.accent)
+                                }
+                                if (onAddToTeam != null) {
+                                    TextButton(onClick = {
+                                        onAddToTeam(
+                                            ai.gowtam.oak.features.teams.incomingMemberFromSpecies(
+                                                row.name,
+                                                ability = row.ability,
+                                            ),
+                                        )
+                                    }) {
+                                        Text("Add to team", color = oak.accent)
+                                    }
+                                }
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            for (type in row.types) {
+                                Box(modifier = Modifier.clickable { onOpenType(type) }) {
+                                    TypeBadge(type = type)
+                                }
+                            }
+                        }
+                    }
+                    if (index < preview.lastIndex) {
+                        HorizontalDivider()
+                    }
+                }
+            }
+            TextButton(
+                onClick = { onBrowseAll?.invoke() },
+                modifier = Modifier.testTag("candidate-table-browse"),
+            ) {
+                Text(
+                    text = "Browse all ${CandidatePreview.browseCount(candidates)}",
+                    color = oak.accent,
+                )
+            }
+        } else {
         androidx.compose.material3.OutlinedTextField(
             value = nameQuery,
             onValueChange = { nameQuery = it },
@@ -274,6 +381,7 @@ fun CandidatesTable(
                     Text(text = "Show all ${candidates.totalCount}", color = oak.accent)
                 }
             }
+        }
         }
     }
 }

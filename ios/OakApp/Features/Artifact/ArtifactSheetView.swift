@@ -174,6 +174,22 @@ struct ArtifactSheetView: View {
           .padding(Theme.Spacing.sm)
       }
       .background(Theme.canvas)
+    case .candidates(let candidates):
+      ScrollView {
+        CandidatesTableView(
+          candidates: candidates,
+          onOpenPokemon: { query in
+            Task { await model.openEntity(kind: .pokemon, query: query) }
+          },
+          onOpenType: { query in
+            Task { await model.openEntity(kind: .type, query: query) }
+          },
+          onShowAll: model.pendingCandidatesShowAll,
+          layout: .table
+        )
+        .padding(Theme.Spacing.lg)
+      }
+      .background(Theme.canvas)
     case .unavailable(let kind, let query, let suggestions):
       missView(
         title: "Couldn't open \(query)",

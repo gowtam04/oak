@@ -170,6 +170,7 @@ fun ArtifactSheet(
                     requestFormat = viewModel.activeFormat,
                     onOpen = viewModel::openEntity,
                     onAddToTeam = onAddToTeam,
+                    onShowAll = viewModel.pendingCandidatesShowAll,
                 )
             }
         }
@@ -295,6 +296,7 @@ private fun ArtifactContentDispatch(
     requestFormat: Format,
     onOpen: (EntityKind, String) -> Unit,
     onAddToTeam: ((ai.gowtam.oak.wire.TeamMember) -> Unit)? = null,
+    onShowAll: (() -> Unit)? = null,
 ) {
     when (content) {
         ArtifactContent.Loading -> LoadingView()
@@ -312,6 +314,14 @@ private fun ArtifactContentDispatch(
             onAddToTeam = onAddToTeam,
         )
         is ArtifactContent.DamageCalcContent -> DamageCalcViewport(content.v)
+        is ArtifactContent.CandidatesList -> ai.gowtam.oak.features.chat.answercard.CandidatesTable(
+            candidates = content.v,
+            onOpenPokemon = { onOpen(EntityKind.POKEMON, it) },
+            onOpenType = { onOpen(EntityKind.TYPE, it) },
+            onShowAll = { onShowAll?.invoke() },
+            onAddToTeam = onAddToTeam,
+            variant = ai.gowtam.oak.features.chat.answercard.CandidatesTableVariant.Full,
+        )
         is ArtifactContent.Unavailable -> MissView(
             title = "Couldn't open ${content.query}",
             message = "Oak doesn't have a ${content.kind.rawValue} profile for “${content.query}” in this format.",

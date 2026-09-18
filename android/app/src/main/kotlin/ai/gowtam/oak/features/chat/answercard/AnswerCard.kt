@@ -215,6 +215,8 @@ fun AnswerCard(
                         },
                         onAddToTeam = actions.onAddToTeam,
                         highlightedName = highlight?.takeIf { it.target == CitationAnchor.Target.FactRow }?.id,
+                        variant = CandidatesTableVariant.Preview,
+                        onBrowseAll = { actions.onOpenCandidates(answer.candidates!!) },
                         modifier = sectionModifier,
                     )
                     AnswerSection.DAMAGE -> DamageCalcBlock(
@@ -295,6 +297,8 @@ data class AnswerCardActions(
     val onOpenComparison: (List<Subject>) -> Unit = {},
     /** Opens the answer's damage calculation from its inline data (P7). */
     val onOpenDamageCalc: (DamageCalc) -> Unit = {},
+    /** Opens the answer's candidate list from its inline data (AV-US-2). */
+    val onOpenCandidates: (ai.gowtam.oak.wire.Candidates) -> Unit = {},
     /** Opens the standalone calculator prefilled from a damage block (CALC-AC-2.1). */
     val onOpenCalculator: (ai.gowtam.oak.wire.CalcScenario) -> Unit = {},
     val calculatorFormat: ai.gowtam.oak.wire.Format = ai.gowtam.oak.wire.Format.Champions,

@@ -78,6 +78,35 @@ struct CandidatesExpansionTests {
   // MARK: over the committed fixture
 
   @Test
+  func previewCapsAtSixRows() {
+    let rows = (1...12).map { row("P\($0)") }
+    let preview = CandidatePreview.rows(from: rows)
+    #expect(preview.count == CandidatePreview.cap)
+    #expect(preview.last?.name == "P6")
+    #expect(preview.contains(where: { $0.name == "P7" }) == false)
+  }
+
+  @Test
+  func browseCountUsesTotalWhenHiddenRowsCanExpand() {
+    let withHidden = Candidates(
+      totalCount: 4,
+      truncated: true,
+      sort: nil,
+      shown: [row("A"), row("B")],
+      hiddenRows: [row("C"), row("D")]
+    )
+    #expect(CandidatePreview.browseCount(candidates: withHidden) == 4)
+
+    let truncatedNoHidden = Candidates(
+      totalCount: 50,
+      truncated: true,
+      sort: nil,
+      shown: [row("A"), row("B")]
+    )
+    #expect(CandidatePreview.browseCount(candidates: truncatedNoHidden) == 2)
+  }
+
+  @Test
   func fixtureExpandsToTheFullSet() throws {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_candidates_hidden.json")
     let candidates = try #require(answer.candidates)

@@ -43,6 +43,7 @@ import TypeMatchupsArtifact from "./TypeMatchupsArtifact";
 import ComparisonArtifact from "./ComparisonArtifact";
 import DamageCalcArtifact from "./DamageCalcArtifact";
 import TeamArtifact from "./TeamArtifact";
+import CandidateTable from "@/components/answer-card/CandidateTable";
 
 const DEX_PATH: Record<"pokemon" | "move" | "ability" | "item", string> = {
   pokemon: "/pokedex",
@@ -125,6 +126,12 @@ function headerFor(view: ArtifactView): HeaderInfo {
     if (view.artifact.kind === "comparison") {
       return {
         title: "Comparison",
+        formatTag: formatLabel(view.artifact.format),
+      };
+    }
+    if (view.artifact.kind === "candidates") {
+      return {
+        title: "Candidates",
         formatTag: formatLabel(view.artifact.format),
       };
     }
@@ -213,15 +220,30 @@ function ArtifactBody({
   const { openEntity } = useArtifactViewer();
 
   if (view.type === "structured") {
-    return view.artifact.kind === "comparison" ? (
-      <ComparisonArtifact
-        subjects={view.artifact.subjects}
-        signedIn={signedIn}
-        diff={view.artifact.diff}
-      />
-    ) : (
-      <DamageCalcArtifact damageCalc={view.artifact.damageCalc} />
-    );
+    if (view.artifact.kind === "comparison") {
+      return (
+        <ComparisonArtifact
+          subjects={view.artifact.subjects}
+          signedIn={signedIn}
+          diff={view.artifact.diff}
+        />
+      );
+    }
+    if (view.artifact.kind === "candidates") {
+      const format = isFormat(view.artifact.format)
+        ? view.artifact.format
+        : "champions";
+      return (
+        <CandidateTable
+          candidates={view.artifact.candidates}
+          variant="full"
+          signedIn={signedIn}
+          format={format}
+          onShowAll={view.artifact.onShowAll}
+        />
+      );
+    }
+    return <DamageCalcArtifact damageCalc={view.artifact.damageCalc} />;
   }
 
   if (view.type === "team") {

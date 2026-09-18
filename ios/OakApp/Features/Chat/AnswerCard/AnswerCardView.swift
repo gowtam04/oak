@@ -85,6 +85,10 @@ struct AnswerCardView: View {
   /// ``ArtifactViewModel/openDamageCalc(_:)``; no-op default.
   var onOpenDamageCalc: (DamageCalc) -> Void = { _ in }
 
+  /// Opens the answer's candidate list in the artifact viewer from INLINE data
+  /// (AV-US-2 / M-ART-US-2). No-op default.
+  var onOpenCandidates: (Candidates) -> Void = { _ in }
+
   /// Copies the human-readable projection (COPY-US-1). Optional so existing
   /// call sites keep working; when set, the card also offers human copy.
   var onCopyHuman: () -> Void = {}
@@ -333,13 +337,13 @@ struct AnswerCardView: View {
           }(),
           onOpenPokemon: { onOpenEntity(.pokemon, $0) },
           onOpenType: { onOpenEntity(.type, $0) },
-          // Truncated sets offer a "Show all N" follow-up, sending the exact
-          // request text the web CandidateTable sends (a plain follow-up turn).
           onShowAll: {
             onFollowUp(
               "Show me all \(candidates.totalCount) of those, not just the top \(candidates.shown.count)."
             )
-          }
+          },
+          layout: .preview,
+          onBrowseAll: { onOpenCandidates(candidates) }
         )
         .frame(maxWidth: dataMaxWidth, alignment: .leading)
       }

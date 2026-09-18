@@ -137,6 +137,17 @@ final class ArtifactViewModel {
     stack.append(Artifact(title: "Damage calculation", content: .damageCalc(damageCalc)))
   }
 
+  /// Opens the answer's **candidate list** from INLINE `candidates` (no fetch —
+  /// AV-US-2 / M-ART-US-2). `onShowAll` is the truncated follow-up when hidden
+  /// rows were not shipped.
+  func openCandidates(_ candidates: Candidates, onShowAll: (() -> Void)? = nil) {
+    pendingCandidatesShowAll = onShowAll
+    stack.append(Artifact(title: "Candidates", content: .candidates(candidates)))
+  }
+
+  /// Follow-up for a truncated candidate list opened in the viewer.
+  private(set) var pendingCandidatesShowAll: (() -> Void)?
+
   /// Opens a **saved team** by id, fetching its members + warnings fresh (M-AC-A3.2: the
   /// saved-team card's "Open in viewer"). Pushes a `.loading` entry, then resolves to the team or
   /// `.teamUnavailable` if it can't be loaded.
@@ -308,6 +319,8 @@ enum ArtifactContent: Sendable {
   /// A worked damage calculation — rendered from the answer's INLINE `damage_calc`
   /// (no fetch). Mirrors the web `damage-calc` structured artifact.
   case damageCalc(DamageCalc)
+  /// The answer's candidate list — rendered from INLINE `candidates` (no fetch).
+  case candidates(Candidates)
   /// An entity that couldn't be shown (`not_found` / `unavailable` / transport) — an honest miss
   /// (M-BR-ART-5), carrying the original kind + query for the message and, on a `not_found`, the
   /// server's close-name `suggestions` (empty otherwise) to offer as tappable retries (#2).

@@ -324,6 +324,39 @@ struct ArtifactViewModelTests {
   }
 
   @Test
+  func openCandidatesUsesInlinePayloadWithNoFetch() {
+    let (vm, service) = makeVM()
+    let candidates = Candidates(
+      totalCount: 12,
+      truncated: false,
+      sort: "name",
+      shown: [
+        CandidateRow(
+          name: "Reuniclus",
+          dexNumber: 579,
+          spriteUrl: nil,
+          types: ["psychic"],
+          baseStats: nil,
+          keyStats: nil,
+          ability: nil
+        )
+      ]
+    )
+
+    vm.openCandidates(candidates)
+
+    #expect(vm.stack.count == 1)
+    #expect(vm.isPresented)
+    #expect(vm.current?.title == "Candidates")
+    guard case .candidates(let opened)? = vm.current?.content else {
+      Issue.record("expected candidates artifact")
+      return
+    }
+    #expect(opened.shown.first?.name == "Reuniclus")
+    #expect(service.entityCallCount == 0)
+  }
+
+  @Test
   func structuredArtifactsPushOntoTheBackStack() async throws {
     let ok = try Fixtures.decode(EntityArtifact.self, from: "entity_pokemon.json")
     let (vm, _) = makeVM(entityResult: ok)

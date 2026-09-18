@@ -110,7 +110,14 @@ export function ArtifactViewerProvider({
             subjects: input.subjects,
             ...(input.diff ? { diff: input.diff } : {}),
           }
-        : { kind: "damage-calc", format: fmt, damageCalc: input.damageCalc };
+        : input.kind === "candidates"
+          ? {
+              kind: "candidates",
+              format: fmt,
+              candidates: input.candidates,
+              ...(input.onShowAll ? { onShowAll: input.onShowAll } : {}),
+            }
+          : { kind: "damage-calc", format: fmt, damageCalc: input.damageCalc };
     setStack((prev) => [...prev, { id, type: "structured", artifact }]);
   }, []);
 

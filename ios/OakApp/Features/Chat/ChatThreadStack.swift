@@ -230,6 +230,16 @@ struct ChatThreadStack: View {
               scenario: scenarioFromDamageCalc(calc, format: model.displayFormat)
             )
           },
+          onOpenCandidates: { candidates in
+            artifactModel?.openCandidates(
+              candidates,
+              onShowAll: {
+                sendFollowUp(
+                  "Show me all \(candidates.totalCount) of those, not just the top \(candidates.shown.count)."
+                )
+              }
+            )
+          },
           onCopyHuman: {
             UIPasteboard.general.string = OakAnswerHumanMarkdown.build(answer)
           }

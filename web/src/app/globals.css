@@ -1663,11 +1663,13 @@
    it out of the table formatting context and broke column alignment. */
 .candidate-table__scroll {
   overflow-x: auto;
+  overflow-y: visible;
   /* Always-visible slim track + edge mask so right-hand columns (Stats /
      Ability) read as scrollable on a phone instead of being silently clipped. */
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
   overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
 }
 .candidate-table__scroll::-webkit-scrollbar {
   height: 8px;
@@ -1772,6 +1774,62 @@
   color: var(--text-muted);
   text-transform: capitalize;
   white-space: nowrap;
+}
+.candidate-table__browse {
+  margin-left: auto;
+  padding: 4px var(--space-3);
+  min-height: 32px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--azure);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.candidate-table__browse:hover:not(:disabled) {
+  background: var(--azure-soft);
+  border-color: var(--azure);
+}
+.candidate-table__browse:disabled {
+  color: var(--text-faint);
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+.candidate-table__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.candidate-table__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.candidate-table__item:last-child {
+  border-bottom: none;
+}
+.candidate-table__item:hover {
+  background: var(--surface-sunken);
+}
+.candidate-table__item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.candidate-table__item-verbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.candidate-table--preview {
+  overflow: hidden;
 }
 
 /* --------------------------------------------------------------------------
@@ -6020,7 +6078,8 @@ button.scope-chip:focus-visible {
   .scope-chip,
   .auth-pill,
   .active-team-selector__select,
-  .candidate-table__show-all {
+  .candidate-table__show-all,
+  .candidate-table__browse {
     min-height: 44px;
   }
   .suggestion-chips__chip,
