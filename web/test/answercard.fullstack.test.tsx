@@ -151,7 +151,11 @@ describe("AnswerCard — canonical answered payload (all fields)", () => {
     expect(card).toHaveAttribute("data-status", "answered");
     expect(card).toHaveAttribute("data-plate", "typed");
     expect(screen.getByTestId("answer-card-types")).toBeInTheDocument();
-    expect(screen.getByTestId("type-badge-dragon")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("answer-card-types")).getByTestId(
+        "type-badge-dragon",
+      ),
+    ).toBeInTheDocument();
   });
 });
 

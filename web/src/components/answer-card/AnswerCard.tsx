@@ -240,6 +240,7 @@ export default function AnswerCard({
       {candidates && (
         <CandidateTable
           candidates={candidates}
+          variant="preview"
           onShowAll={() =>
             followUp(
               `Show me all ${candidates.total_count} of those, not just the top ${candidates.shown.length}.`,

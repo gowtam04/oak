@@ -293,6 +293,22 @@ class ArtifactViewModelTest {
         vm.openDamageCalc(DamageCalc(assumptions = emptyMap(), result = mapOf("max_percent" to JsonScalar.IntVal(50)), isEstimate = true))
         assertTrue(vm.current!!.content is ArtifactContent.DamageCalcContent)
 
+        vm.openCandidates(
+            ai.gowtam.oak.wire.Candidates(
+                totalCount = 12,
+                truncated = false,
+                sort = "name",
+                shown = listOf(
+                    ai.gowtam.oak.wire.CandidateRow(
+                        name = "Reuniclus",
+                        types = listOf("psychic"),
+                    ),
+                ),
+            ),
+        )
+        assertTrue(vm.current!!.content is ArtifactContent.CandidatesList)
+        assertEquals("Candidates", vm.current!!.title)
+
         assertTrue(service.entityCalls.isEmpty())
         assertTrue(service.savedTeamCalls.isEmpty())
     }

@@ -220,6 +220,16 @@ fun ChatScreen(
             onOpenProposedTeam = artifactViewModel::openProposedTeam,
             onOpenComparison = artifactViewModel::openComparison,
             onOpenDamageCalc = artifactViewModel::openDamageCalc,
+            onOpenCandidates = { candidates ->
+                artifactViewModel.openCandidates(
+                    candidates,
+                    onShowAll = {
+                        viewModel.sendFollowUp(
+                            "Show me all ${candidates.totalCount} of those, not just the top ${candidates.shown.size}.",
+                        )
+                    },
+                )
+            },
             onOpenCalculator = viewModel::openCalculator,
             calculatorFormat = uiState.displayFormat,
             onAddToTeam = if (uiState.canAddToTeam) { member -> addIncoming = member } else null,

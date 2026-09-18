@@ -44,6 +44,16 @@ struct CandidatesTableView: View {
   /// count only.
   var onShowAll: (() -> Void)?
 
+  /// Answer-card preview vs full table in the artifact viewer.
+  var layout: Layout = .table
+  /// Opens the candidates artifact (preview only).
+  var onBrowseAll: (() -> Void)?
+
+  enum Layout: Equatable, Sendable {
+    case preview
+    case table
+  }
+
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   /// Flips once, on this view instance's first appearance, to drive the one-shot
@@ -93,16 +103,91 @@ struct CandidatesTableView: View {
     } else {
       VStack(alignment: .leading, spacing: 10) {
         caption
-        tableTools
-        table
-        if candidates.truncated {
-          footer
+        if layout == .preview {
+          Text(previewCountLabel)
+            .font(Theme.body(.caption))
+            .foregroundStyle(Theme.textSecondary)
+          previewList
+          browseButton
+        } else {
+          tableTools
+          table
+          if candidates.truncated {
+            footer
+          }
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
+      .fixedSize(horizontal: false, vertical: true)
       .onAppear { resetTableState() }
       .onChange(of: expanded) { _, _ in resetTableState() }
     }
+  }
+
+  private var previewRows: [CandidateRow] {
+    CandidatePreview.rows(from: displayedRows)
+  }
+
+  private var browseCount: Int {
+    CandidatePreview.browseCount(candidates: candidates)
+  }
+
+  private var previewCountLabel: String {
+    if candidates.truncated && !expanded {
+      return "Showing \(previewRows.count) of \(candidates.totalCount)"
+    }
+    if previewRows.count < displayedRows.count {
+      return "Showing \(previewRows.count) of \(candidates.totalCount)"
+    }
+    let suffix = candidates.totalCount == 1 ? "" : "s"
+    return "\(candidates.totalCount) result\(suffix)"
+  }
+
+  private var previewList: some View {
+    VStack(spacing: 0) {
+      ForEach(Array(previewRows.enumerated()), id: \.offset) { index, row in
+        stackedRow(row, index: index)
+        if index < previewRows.count - 1 {
+          Divider().overlay(Theme.separator)
+        }
+      }
+    }
+    .background(Theme.surface)
+    .oakCard(radius: Theme.Radius.md)
+    .fixedSize(horizontal: false, vertical: true)
+  }
+
+  private func stackedRow(_ row: CandidateRow, index: Int) -> some View {
+    let highlighted = highlightedRow?.caseInsensitiveCompare(row.name) == .orderedSame
+    return HStack(alignment: .center, spacing: 10) {
+      Button {
+        onOpenPokemon(row.name)
+      } label: {
+        pokemonCell(row)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityHint("Opens \(row.name)")
+      typesCell(row)
+    }
+    .padding(.horizontal, Theme.Spacing.md)
+    .padding(.vertical, Theme.Spacing.sm)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(highlighted ? Theme.accent.opacity(0.14) : rowBackground(index))
+  }
+
+  private var browseButton: some View {
+    Button {
+      onBrowseAll?()
+    } label: {
+      Text("Browse all \(browseCount)")
+        .font(Theme.display(.footnote, weight: .semibold))
+        .frame(maxWidth: .infinity)
+    }
+    .buttonStyle(.oakSecondary)
+    .accessibilityLabel("Browse all \(browseCount)")
+    .accessibilityHint("Opens the full list")
   }
 
   private func resetTableState() {
@@ -127,7 +212,7 @@ struct CandidatesTableView: View {
           .foregroundStyle(Theme.textSecondary)
       }
       Spacer(minLength: 0)
-      if !tableState.tsv.isEmpty {
+      if layout == .table, !tableState.tsv.isEmpty {
         Button {
           UIPasteboard.general.string = tableState.tsv
           Haptics.tap()
@@ -191,11 +276,11 @@ struct CandidatesTableView: View {
           dataRow(row, index: index)
         }
       }
+      .fixedSize(horizontal: true, vertical: true)
+      .background(Theme.surface)
+      .oakCard(radius: Theme.Radius.md)
     }
-    .background(Theme.surface)
-    .oakCard(radius: Theme.Radius.md)
-    // A trailing fade hints there's more to scroll to; a plain static overlay is
-    // fine here — it just dims when the content already fits (no measurement).
+    .fixedSize(horizontal: false, vertical: true)
     .overlay(alignment: .trailing) { scrollFade }
     .onAppear { hasAppeared = true }
   }
@@ -748,6 +833,22 @@ private func prettyKey(_ key: String) -> String {
   .padding(16)
 }
 #endif
+
+/// Answer-card preview: at most six stacked rows, with Browse opening the rest.
+enum CandidatePreview {
+  static let cap = 6
+
+  static func rows(from rows: [CandidateRow]) -> [CandidateRow] {
+    Array(rows.prefix(cap))
+  }
+
+  static func browseCount(candidates: Candidates) -> Int {
+    if !candidates.truncated || candidates.canExpandLocally {
+      return candidates.totalCount
+    }
+    return candidates.shown.count
+  }
+}
 
 /// Shown-set table tools (TBL-US-1–4). Sort / filter / row-pin / TSV operate
 /// only on the currently shown rows — never the hidden remainder (TBL-BR-1).

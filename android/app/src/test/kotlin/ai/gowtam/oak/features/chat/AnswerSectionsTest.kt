@@ -1,6 +1,7 @@
 package ai.gowtam.oak.features.chat
 
 import ai.gowtam.oak.features.chat.answercard.AnswerSection
+import ai.gowtam.oak.features.chat.answercard.CandidatePreview
 import ai.gowtam.oak.features.chat.answercard.CandidateTableQuery
 import ai.gowtam.oak.features.chat.answercard.answerSections
 import ai.gowtam.oak.features.chat.answercard.citationHighlight
@@ -257,6 +258,44 @@ class AnswerSectionsTest {
         )
         assertEquals("Garchomp", visible.first().name)
         assertEquals(listOf("Garchomp", "Excadrill"), visible.map { it.name })
+    }
+
+    @Test
+    fun previewCapsAtSixRows() {
+        val rows = (1..12).map { i ->
+            CandidateRow(name = "P$i", types = listOf("normal"))
+        }
+        val preview = CandidatePreview.rows(rows)
+        assertEquals(CandidatePreview.CAP, preview.size)
+        assertEquals("P6", preview.last().name)
+        assertFalse(preview.any { it.name == "P7" })
+    }
+
+    @Test
+    fun browseCountUsesTotalWhenHiddenRowsCanExpand() {
+        val withHidden = Candidates(
+            totalCount = 4,
+            truncated = true,
+            shown = listOf(
+                CandidateRow(name = "A", types = listOf("normal")),
+                CandidateRow(name = "B", types = listOf("normal")),
+            ),
+            hiddenRows = listOf(
+                CandidateRow(name = "C", types = listOf("normal")),
+                CandidateRow(name = "D", types = listOf("normal")),
+            ),
+        )
+        assertEquals(4, CandidatePreview.browseCount(withHidden))
+
+        val truncatedNoHidden = Candidates(
+            totalCount = 50,
+            truncated = true,
+            shown = listOf(
+                CandidateRow(name = "A", types = listOf("normal")),
+                CandidateRow(name = "B", types = listOf("normal")),
+            ),
+        )
+        assertEquals(2, CandidatePreview.browseCount(truncatedNoHidden))
     }
 
     @Test

@@ -4,14 +4,19 @@
  * The viewer shows ONE artifact at a time (BR-AV-4) backed by a back-stack
  * (AV-US-5/6): every open pushes, `back` pops, `close` clears. Two artifact
  * sources (TD-2): ENTITY artifacts are fetched from `/api/entity`; STRUCTURED
- * artifacts (comparison, damage-calc) are derived from the committed
+ * artifacts (comparison, damage-calc, candidates) are derived from the committed
  * `OakAnswer` payload (no fetch). The current data `format` is snapshotted
  * onto each view at open time (BR-AV-7).
  *
  * Type-only module — safe for client + isolation tests.
  */
 
-import type { DamageCalc, EntityKind, Subject } from "@/agent/schemas";
+import type {
+  Candidates,
+  DamageCalc,
+  EntityKind,
+  Subject,
+} from "@/agent/schemas";
 import type { PokemonCompareDiff } from "@/lib/pokemon-compare";
 import type {
   ArtifactFormat,
@@ -52,7 +57,14 @@ export type StructuredArtifact =
       /** Present when the user built this via Compare with… (CMP-US-1/3). */
       diff?: PokemonCompareDiff;
     }
-  | { kind: "damage-calc"; format: ArtifactFormat; damageCalc: DamageCalc };
+  | { kind: "damage-calc"; format: ArtifactFormat; damageCalc: DamageCalc }
+  | {
+      kind: "candidates";
+      format: ArtifactFormat;
+      candidates: Candidates;
+      /** Follow-up when the set is truncated and `hidden_rows` was not shipped. */
+      onShowAll?: () => void;
+    };
 
 export interface StructuredArtifactView {
   id: number;
@@ -101,7 +113,12 @@ export type TeamArtifactInput =
 /** Open-a-structured-artifact input — the provider stamps the format. */
 export type StructuredArtifactInput =
   | { kind: "comparison"; subjects: Subject[]; diff?: PokemonCompareDiff }
-  | { kind: "damage-calc"; damageCalc: DamageCalc };
+  | { kind: "damage-calc"; damageCalc: DamageCalc }
+  | {
+      kind: "candidates";
+      candidates: Candidates;
+      onShowAll?: () => void;
+    };
 
 /** The viewer API exposed through context (no-op default when no provider). */
 export interface ArtifactViewerApi {

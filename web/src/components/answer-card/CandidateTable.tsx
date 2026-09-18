@@ -82,9 +82,20 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+/** Rows shown in the answer-card preview; the rest open in the viewer. */
+export const CANDIDATE_PREVIEW_CAP = 6;
+
+export type CandidateTableVariant = "preview" | "full";
+
 export type CandidateTableP6Props = CandidateTableProps & {
   signedIn?: boolean;
   format?: Format;
+  /**
+   * `preview` (answer card): stacked Dex-like rows, capped at
+   * {@link CANDIDATE_PREVIEW_CAP}, with Browse opening the viewer.
+   * `full` (artifact viewer): tools + every shown row.
+   */
+  variant?: CandidateTableVariant;
 };
 
 /**
@@ -97,7 +108,9 @@ export default function CandidateTable({
   disabled = false,
   signedIn = false,
   format = "national-dex",
+  variant = "full",
 }: CandidateTableP6Props) {
+  const { openStructured } = useArtifactViewer();
   const { total_count, truncated, shown, sort, hidden_rows } = candidates;
 
   const canExpandLocally = truncated && (hidden_rows?.length ?? 0) > 0;
@@ -146,10 +159,19 @@ export default function CandidateTable({
     return out;
   }, [baseRows, sortKey, sortDir, typeFilter, nameSearch, pinned]);
 
+  const isPreview = variant === "preview";
+  const previewRows = isPreview
+    ? visible.slice(0, CANDIDATE_PREVIEW_CAP)
+    : visible;
+  const previewCapped = isPreview && visible.length > CANDIDATE_PREVIEW_CAP;
   const countLabel =
     truncated && !expanded
-      ? `Showing ${shown.length} of ${total_count}`
-      : `${total_count} result${total_count !== 1 ? "s" : ""}`;
+      ? `Showing ${isPreview ? previewRows.length : shown.length} of ${total_count}`
+      : previewCapped
+        ? `Showing ${previewRows.length} of ${total_count}`
+        : `${total_count} result${total_count !== 1 ? "s" : ""}`;
+  const browseCount =
+    !truncated || canExpandLocally ? total_count : shown.length;
 
   const sortDisplay = sort ? formatSort(sort) : null;
 
@@ -192,8 +214,24 @@ export default function CandidateTable({
     void navigator.clipboard?.writeText(tsv);
   }
 
+  function browseAll() {
+    openStructured({
+      kind: "candidates",
+      candidates,
+      onShowAll: canExpandLocally ? undefined : onShowAll,
+    });
+  }
+
   return (
-    <div className="candidate-table" data-testid="candidate-table">
+    <div
+      className={
+        isPreview
+          ? "candidate-table candidate-table--preview"
+          : "candidate-table candidate-table--full"
+      }
+      data-testid="candidate-table"
+      data-variant={variant}
+    >
       <div className="candidate-table__header">
         <span
           className="candidate-table__count"
@@ -218,7 +256,7 @@ export default function CandidateTable({
             </span>
           </span>
         )}
-        {showAllVisible && handleShowAll && (
+        {!isPreview && showAllVisible && handleShowAll && (
           <button
             type="button"
             className="candidate-table__show-all"
@@ -229,8 +267,36 @@ export default function CandidateTable({
             Show all {total_count}
           </button>
         )}
+        {isPreview && (
+          <button
+            type="button"
+            className="candidate-table__browse"
+            data-testid="candidate-table-browse"
+            onClick={browseAll}
+          >
+            Browse all {browseCount}
+          </button>
+        )}
       </div>
 
+      {isPreview && (
+        <ul className="candidate-table__list" data-testid="candidate-table-list">
+          {previewRows.map((row, i) => (
+            <CandidateListItem
+              key={`${row.name}-${i}`}
+              row={row}
+              index={i}
+              pinned={pinned.has(row.name)}
+              onTogglePin={() => togglePin(row.name)}
+              signedIn={signedIn}
+              onAdd={() => setAddIncoming(row.name)}
+            />
+          ))}
+        </ul>
+      )}
+
+      {!isPreview && (
+      <>
       <div className="candidate-table__tools">
         <div className="candidate-table__sorts">
           {STAT_ORDER.map((key) => (
@@ -317,6 +383,8 @@ export default function CandidateTable({
           </tbody>
         </table>
       </div>
+      </>
+      )}
 
       {signedIn && addIncoming && (
         <AddToTeamPicker
@@ -449,5 +517,105 @@ function CandidateRowView({
         )}
       </td>
     </tr>
+  );
+}
+
+interface CandidateListItemProps {
+  row: CandidateRow;
+  index: number;
+  pinned: boolean;
+  onTogglePin: () => void;
+  signedIn: boolean;
+  onAdd: () => void;
+}
+
+function CandidateListItem({
+  row,
+  index,
+  pinned,
+  onTogglePin,
+  signedIn,
+  onAdd,
+}: CandidateListItemProps) {
+  const { openEntity } = useArtifactViewer();
+
+  return (
+    <li>
+      <div
+        className="candidate-table__item"
+        data-testid={`candidate-row-${index}`}
+        onClick={() => openEntity({ kind: "pokemon", q: row.name })}
+      >
+        <div className="candidate-table__name-inner">
+          {row.sprite_url && (
+            <SpriteImg
+              src={row.sprite_url}
+              fallbackSrc={
+                row.dex_number != null
+                  ? oakMediaDexSpriteUrl(row.dex_number)
+                  : undefined
+              }
+              alt={row.name}
+              width={40}
+              height={40}
+              className="candidate-table__sprite"
+            />
+          )}
+          <div className="candidate-table__item-main">
+            <EntityLink
+              kind="pokemon"
+              q={row.name}
+              className="candidate-table__name-link"
+              testid={`candidate-entity-${index}`}
+            >
+              {row.name}
+            </EntityLink>
+            {row.dex_number != null && (
+              <div className="candidate-table__dex">
+                #{String(row.dex_number).padStart(4, "0")}
+              </div>
+            )}
+            <div className="candidate-table__item-verbs">
+              <button
+                type="button"
+                className="candidate-table__row-pin"
+                data-testid={`candidate-row-pin-${index}`}
+                aria-pressed={pinned}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTogglePin();
+                }}
+              >
+                {pinned ? "Unpin" : "Pin"}
+              </button>
+              {signedIn && (
+                <button
+                  type="button"
+                  className="candidate-table__add"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAdd();
+                  }}
+                >
+                  Add to team
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="candidate-table__types-inner">
+          {row.types.map((type) => (
+            <EntityLink
+              key={type}
+              kind="type"
+              q={type}
+              className="entity-link--type"
+            >
+              <TypeBadge type={type} />
+            </EntityLink>
+          ))}
+        </div>
+      </div>
+    </li>
   );
 }

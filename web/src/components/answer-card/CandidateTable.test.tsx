@@ -9,14 +9,17 @@ import {
 
 // Spy on the artifact viewer: every row now opens that Pokémon's artifact, so
 // assert against openEntity. Hoisted so the vi.mock factory can close over it.
-const { openEntity } = vi.hoisted(() => ({ openEntity: vi.fn() }));
+const { openEntity, openStructured } = vi.hoisted(() => ({
+  openEntity: vi.fn(),
+  openStructured: vi.fn(),
+}));
 vi.mock("@/components/artifact/useArtifactViewer", () => ({
   useArtifactViewer: () => ({
     isOpen: false,
     current: null,
     canGoBack: false,
     openEntity,
-    openStructured: () => {},
+    openStructured,
     openTeam: () => {},
     back: () => {},
     close: () => {},
@@ -26,6 +29,7 @@ vi.mock("@/components/artifact/useArtifactViewer", () => ({
 afterEach(() => {
   cleanup();
   openEntity.mockClear();
+  openStructured.mockClear();
 });
 import CandidateTable from "./CandidateTable";
 import {
@@ -350,5 +354,76 @@ describe("CandidateTable — shown-set tools (TBL-US-1–4)", () => {
     if (writeText.mock.calls.length > 0) {
       expect(writeText.mock.calls[0]![0]).toBe("");
     }
+  });
+});
+
+function twelveCandidates(): Candidates {
+  const names = [
+    "Reuniclus",
+    "Runerigus",
+    "Slowbro",
+    "Slowbro (Galar)",
+    "Slowbro (Mega)",
+    "Slowking",
+    "Slowking (Galar)",
+    "Snorlax",
+    "Snorunt",
+    "Spectrier",
+    "Spiritomb",
+    "Starmie",
+  ];
+  return {
+    total_count: names.length,
+    truncated: false,
+    sort: "name",
+    shown: names.map((name, i) => ({
+      name,
+      dex_number: 500 + i,
+      types: ["psychic"],
+    })),
+  };
+}
+
+describe("CandidateTable — preview (phone-usable list)", () => {
+  it("caps the card at 6 rows and offers Browse all N", () => {
+    render(
+      <CandidateTable candidates={twelveCandidates()} variant="preview" />,
+    );
+    expect(screen.getByTestId("candidate-table-count")).toHaveTextContent(
+      "Showing 6 of 12",
+    );
+    expect(screen.getByTestId("candidate-row-0")).toHaveTextContent("Reuniclus");
+    expect(screen.getByTestId("candidate-row-5")).toHaveTextContent("Slowking");
+    expect(screen.queryByTestId("candidate-row-6")).not.toBeInTheDocument();
+    expect(screen.queryByText("Snorlax")).not.toBeInTheDocument();
+    expect(screen.getByTestId("candidate-table-browse")).toHaveTextContent(
+      "Browse all 12",
+    );
+    expect(
+      screen.queryByTestId("candidate-table-type-filter"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens the candidates artifact from Browse all", () => {
+    const payload = twelveCandidates();
+    render(<CandidateTable candidates={payload} variant="preview" />);
+    fireEvent.click(screen.getByTestId("candidate-table-browse"));
+    expect(openStructured).toHaveBeenCalledWith({
+      kind: "candidates",
+      candidates: payload,
+      onShowAll: undefined,
+    });
+  });
+
+  it("keeps an honest N of M when the truncated set is smaller than the cap", () => {
+    render(
+      <CandidateTable candidates={CANDIDATES_TRUNCATED} variant="preview" />,
+    );
+    expect(screen.getByTestId("candidate-table-count")).toHaveTextContent(
+      "Showing 2 of 50",
+    );
+    expect(screen.getByTestId("candidate-table-browse")).toHaveTextContent(
+      "Browse all 2",
+    );
   });
 });
