@@ -2,20 +2,22 @@
 
 Category: **Reference**. Age rating: **4+**. Price: **Free, no in-app purchases.**
 
-Champions-first (CF-INT-BR-10, CF-AS-6): listing copy describes Oak as a
-**Pokémon Champions coach**, not a whole-franchise or every-generation Dex. No
-National Dex default, no Smogon OU, no generation toggle.
+Champions-first (CF-INT-BR-10, CF-AS-6): the product coaches the current
+regulation only. No National Dex default, no Smogon OU, no generation toggle.
+
+App Review rejected 1.2 (build 57) on 2026-09-16 under Guideline 4.1(a):
+the metadata resembled a third-party game without authorization. The store
+listing below is the resubmission copy. It does not use that trademark,
+rights-holder names, character names, or character art. The binary still
+coaches that regulation.
 
 ## App Name (30 chars max)
 
 ```
-Oak – Champions Coach
+Oak – AI Battle Coach
 ```
-**21 / 30 chars.** Home-screen name stays `Oak` (`CFBundleDisplayName`); only
-the App Store display name uses this string. Indexes `oak`, `champions`,
-`coach` so the subtitle supplies "champions team builder" and "champions
-calculator". `ai` moved to Keywords (it used to live in this field). Zero
-trademarked words — "Champions" names the format without "Pokémon".
+**21 / 30 chars.** Same store name as the live 1.0.2 listing. Home-screen
+name stays `Oak` (`CFBundleDisplayName`).
 
 ## Subtitle (30 chars max)
 
@@ -29,34 +31,34 @@ and `damage` → "damage calculator". Zero trademarked words.
 ## Promotional Text (170 chars max, updatable without resubmission)
 
 ```
-Oak now coaches Pokémon Champions only — Stat Points, Mega Evolution, and live Doubles/Singles usage for the current regulation. Other games are declined.
+A coach for the current regulation: Stat Points, team building, and live Doubles and Singles usage. Other games are out of scope.
 ```
-**154 / 170 chars.**
+**129 / 170 chars.**
 
 ## Description (4000 chars max)
 
 ```
-Oak is your AI coach for Pokémon Champions — a chat companion for building and reasoning about competitive teams in the current regulation. Ask a question about your roster and get a reasoned, cited answer, not a stat dump.
+Oak is an AI coach for building and reasoning about competitive teams in the current regulation. Ask a question about your roster and get a reasoned, cited answer, not a stat dump.
 
-Most reference apps hand you raw numbers and leave the thinking to you. Oak reasons on top of the data: every answer comes with its reasoning, the sources it's grounded in, and explicit "this part is inferred" flags whenever the data doesn't fully cover your question — so you always know what's fact and what's a best guess.
+Most reference apps hand you raw numbers and leave the thinking to you. Oak reasons on top of the data: every answer comes with its reasoning, the sources it is grounded in, and an explicit flag when something is inferred.
 
-Oak covers Pokémon Champions only. Other games and a National Dex are out of scope.
+Oak covers one regulation only. Other games are out of scope.
 
 WHAT YOU CAN DO
 
-• Build Champions teams — species, ability, held item, moves, nature, and Stat Points (66 total, max 32 per stat) for every slot. Everything is Level 50; Mega Evolution is the gimmick, with no Tera.
-• Import and export teams using the popular Showdown text format — Stat Points ride in the EV fields.
-• Check live Champions ladder usage (Doubles by default, Singles as a second view) — leaderboard plus per-species sets, dated as a snapshot.
-• Ask anything in plain English and get the direct answer plus the reasoning behind it, with cited sources and clear flags when something is uncertain or inferred.
-• Attach a photo or screenshot — a Champions stats screen or team sheet — and ask Oak about it directly.
-• Drill into any move, ability, type matchup, or damage calculation in a dedicated detail view without losing your place in the conversation.
-• Start chatting instantly as a guest, no account required. Sign in with a one-time email code (no password) when you want your chats and teams saved and synced across devices.
+• Build teams — ability, held item, moves, nature, and Stat Points (66 total, max 32 per stat) for every slot. Everything is Level 50.
+• Import and export teams with a common paste format. Stat Points ride in the stat fields.
+• Check live ladder usage (Doubles by default, Singles as a second view) — a leaderboard and per-entry sets, dated as a snapshot.
+• Ask in plain language and get the direct answer plus the reasoning behind it, with cited sources and a clear flag when something is uncertain or inferred.
+• Attach a photo or screenshot of a stats screen or team sheet and ask Oak about it directly.
+• Open any move, ability, type matchup, or damage calculation without losing your place in the conversation.
+• Start as a guest, with no account required. Sign in with a one-time email code when you want chats and teams saved across devices.
 
-Oak is free to use, with no in-app purchases.
+Oak is free, with no in-app purchases.
 
 ABOUT THIS APP
 
-Oak is an independent, unofficial fan project. It is not affiliated with, endorsed by, sponsored by, or otherwise connected to Nintendo, Game Freak, Creatures Inc., or The Pokémon Company. Game and character names referenced by the underlying data are the property of their respective owners and are mentioned solely to describe what Oak's chat and team builder are compatible with.
+Oak is an independent app. It is not affiliated with, endorsed by, or sponsored by any game publisher.
 
 Questions or feedback? Reach us at www.gowtam.ai/#contact.
 ```
@@ -64,36 +66,27 @@ Questions or feedback? Reach us at www.gowtam.ai/#contact.
 ## Keywords (100 chars max, hidden, comma-separated, no spaces)
 
 ```
-type,chart,weakness,coverage,moveset,damage,mega,speed,battle,showdown,import,ai,chat,usage
+type,chart,weakness,coverage,moveset,damage,speed,battle,import,ai,chat,usage,team
 ```
-**91 / 100 chars.** `champions` and `coach` now live in the App Name, so they
-are omitted here. `ai` moved in from the old name (`Oak – AI Coach`) and sits
-next to `chat` for "ai chat" / "ai coach" (cross-field with the name). Dropped
-`reasoning` to make room (still in the Description). `battle` stays so "battle
-calculator" still combines with the subtitle. Full rationale in
-`aso-keywords.md`.
+**82 / 100 chars.** `showdown` and `mega` are omitted after the 4.1 rejection.
+`battle` stays so "battle calculator" still combines with the subtitle. Full
+rationale in `aso-keywords.md`.
 
 ## What's New (this release)
 
-**1.2 (build 51) — Champions-first.** Listing copy, keywords, screenshots,
-and What's New are on this version in App Store Connect. Screenshots were
-regenerated in Enamel & Paper; still not submitted for review. Same ASC
-version record as 1.1.1 (created 2026-08-16): the 1.1.1 review was
-cancelled and retargeted to 1.2 + build 51 so the Champions listing can
-ship instead of the pre-Champions 1.1.1 binary.
-Live 1.0.2 promotional text is already the Champions line (that field
-updates without a new version). App name on this version is
-`Oak – Champions Coach` (live 1.0.2 still shows `Oak – AI Battle Coach` until
-1.2 is submitted and approved). TestFlight what-to-test and beta
-description use the same Champions-only framing.
+**1.2 resubmission (build 63).** Guideline 4.1(a) rejected build 57 on
+2026-09-16. This version record keeps the same ASC id. Store name returns
+to `Oak – AI Battle Coach`. Screenshots are captures of build 63 with no
+character art and no species names, including the 13-inch iPad set.
+Release type stays `AFTER_APPROVAL`.
 
 ```
 What's new
 
-• Oak now coaches Pokémon Champions only — current regulation, no generation picker
-• Team builder uses Stat Points and Mega Evolution (no Tera)
-• Live Champions usage: Doubles default, Singles as a second view
-• Other games are declined; off-roster names are called out honestly
+• The coach now covers one current regulation, with no format picker
+• Team builder uses Stat Points (66 total, max 32 per stat) at level 50
+• Live usage: Doubles by default, Singles as a second view
+• Other games are out of scope and called out honestly
 ```
 
 **1.1.1 (build 50) — cancelled 2026-09-08** so 1.2 could take the listing.

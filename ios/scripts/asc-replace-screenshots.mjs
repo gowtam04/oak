@@ -19,7 +19,7 @@ const APP_ID = "6786014161";
 const VERSION_ID = "9ec69dc9-92ba-4e87-a0e9-8a33b070261f"; // 1.2
 const LOCALIZATION_ID = "e9aaaa07-be1e-4c1f-9e77-fcea1f3caedc"; // 1.2 en-US
 const FORBIDDEN_LOCALIZATION_ID = "76205c64-3912-4c1b-8d12-da3ff6fc91ce"; // 1.0.2
-const DISPLAY_TYPES = ["APP_IPHONE_67", "APP_IPHONE_65"];
+const DISPLAY_TYPES = ["APP_IPHONE_67", "APP_IPHONE_65", "APP_IPAD_PRO_3GEN_129"];
 const FORBIDDEN_STATES = new Set([
   "WAITING_FOR_REVIEW",
   "IN_REVIEW",
@@ -31,10 +31,17 @@ const API_BASE = "https://api.appstoreconnect.apple.com";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
-const enamelDir = path.join(repoRoot, "docs", "app-store", "generated-screenshots", "enamel");
+const listingDir = path.join(
+  repoRoot,
+  "docs",
+  "app-store",
+  "generated-screenshots",
+  "listing-1.2",
+);
 const PATH_FOR_TYPE = {
-  APP_IPHONE_67: path.join(enamelDir, "1290x2796"),
-  APP_IPHONE_65: path.join(enamelDir, "1284x2778"),
+  APP_IPHONE_67: path.join(listingDir, "iphone-67"),
+  APP_IPHONE_65: path.join(listingDir, "iphone-65"),
+  APP_IPAD_PRO_3GEN_129: path.join(listingDir, "ipad-13"),
 };
 
 function requireEnv() {
@@ -97,11 +104,16 @@ async function uploadBytes(op, chunk) {
 
 function framesFor(displayType) {
   const dir = PATH_FOR_TYPE[displayType];
-  return [1, 2, 3, 4, 5, 6].map((n) => {
-    const filePath = path.join(dir, `frame-${n}.png`);
-    if (!fs.existsSync(filePath)) throw new Error(`Missing ${filePath}`);
-    return { n, filePath, fileName: `frame-${n}.png` };
-  });
+  if (!fs.existsSync(dir)) throw new Error(`Missing screenshot directory ${dir}`);
+  const files = fs
+    .readdirSync(dir)
+    .filter((name) => /^frame-\d+\.png$/.test(name))
+    .sort((a, b) => Number(a.match(/\d+/)[0]) - Number(b.match(/\d+/)[0]));
+  if (files.length < 1) throw new Error(`No frames in ${dir}`);
+  return files.map((fileName) => ({
+    filePath: path.join(dir, fileName),
+    fileName,
+  }));
 }
 
 async function main() {
@@ -216,8 +228,9 @@ async function main() {
     if (!set) throw new Error(`missing set ${displayType} after upload`);
     const shots = await api(creds, `/v1/appScreenshotSets/${set.id}/appScreenshots`);
     console.log(`${displayType}: ${shots.data.length} screenshots`);
-    if (shots.data.length !== 6) {
-      throw new Error(`${displayType} expected 6 screenshots, got ${shots.data.length}`);
+    const expected = framesFor(displayType).length;
+    if (shots.data.length !== expected) {
+      throw new Error(`${displayType} expected ${expected} screenshots, got ${shots.data.length}`);
     }
   }
 }
