@@ -1,14 +1,17 @@
 # Oak — App Store Screenshot Guide (iOS)
 
-6 frames for **1.2 (Champions-first)**, rebuilt in **Enamel & Paper**
-(`docs/design/enamel-paper.md`). Phone art is an Imagine `image_edit` of the
-Signal Champions masters (`generated-screenshots/signal/flat-1290/`); marketing
-headlines are composited in Fredoka / Nunito Sans via
-`generated-screenshots/enamel/overlay/render.html`. Uploaded PNGs live in
-`generated-screenshots/enamel/1290x2796/` (6.7") and `1284x2778/` (6.5").
-Uploaded to ASC **1.2 only** — not submitted for review. Live 1.0.2 screenshots
-are untouched. The Signal set is kept as history. Promo preview
-`oak-1.1-preview.mp4` is the prior 1.1 train and was **not** attached to 1.2.
+The 1.2 resubmission uses captures of build 63, not the generated Enamel
+frames. Guideline 4.1(a) rejected those frames because the phone UI showed
+character art and species names. The upload set lives in
+`generated-screenshots/listing-1.2/`:
+
+- `iphone-67/` — 1290×2796 (`APP_IPHONE_67`)
+- `iphone-65/` — 1284×2778 (`APP_IPHONE_65`)
+- `ipad-13/` — 2752×2064 landscape plus one 2064×2752 portrait (`APP_IPAD_PRO_3GEN_129`)
+
+Frames show the real tab bar or the iPad enamel sidebar. They do not include
+character art or species names. The older Enamel and Signal sets stay in this
+folder as history and are not uploaded. Live 1.0.2 screenshots are untouched.
 
 No trademarked wording in marketing headlines. In-app UI may show species names, as the product does.
 
